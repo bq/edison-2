@@ -1867,10 +1867,15 @@ void mmc_rescan(struct work_struct *work)
 	}
 }
 
+extern int sdio_host;
 void mmc_start_host(struct mmc_host *host)
 {
 	mmc_power_off(host);
-	mmc_detect_change(host, 2000);
+
+	if(sdio_host == 1)
+		mmc_detect_change(host, 0);
+	else
+		mmc_detect_change(host, 2000);
 }
 
 void mmc_stop_host(struct mmc_host *host)

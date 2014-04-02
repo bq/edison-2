@@ -55,6 +55,7 @@
 
 
 int  virtual_battery_enable = 0;
+static int bq27541_cap = 0;
 extern int dwc_vbus_status(void);
 static void bq27541_set(void);
 struct bq27541_platform_data *g_pdata;
@@ -62,6 +63,9 @@ extern bool is_accharging(void);
 extern bool is_usbcharging(void);
 extern void kernel_power_off(void);
 extern volatile bool low_usb_charge;
+extern void rk30_bat_unregister(void);
+extern int bq27541_init = 0;
+
 
 #if 0
 #define DBG(x...) printk(KERN_INFO x)
@@ -343,6 +347,7 @@ static int bq27541_battery_rsoc(struct bq27541_device_info *di)
 			(g_pdata->capacity_max - g_pdata->capacity_min) / 2)
 			/ (g_pdata->capacity_max - g_pdata->capacity_min);
 	}
+	bq27541_cap = rsoc;
 
 	/*check full flags,if not full, show 99%*/
 	ret = bq27541_read(di->client,BQ27x00_REG_FLAGS, buf, 2);
@@ -352,7 +357,7 @@ static int bq27541_battery_rsoc(struct bq27541_device_info *di)
 	}
 	flags = get_unaligned_le16(buf);
 	DBG("Enter:%s %d--flags = 0x%x\n",__FUNCTION__,__LINE__,flags);
-	if (flags & BQ27500_FLAG_FC)
+	if ((bq27541_cap > 99) && (flags & BQ27500_FLAG_FC))
 		status = POWER_SUPPLY_STATUS_FULL;
 
 	if(status != POWER_SUPPLY_STATUS_FULL)
@@ -758,7 +763,14 @@ static int bq27541_battery_probe(struct i2c_client *client,
 		pdata->init_dc_check_pin( );
 	
 	bq27541_powersupply_init(di);
-
+	retval = bq27541_read(di->client,BQ27x00_REG_FLAGS, buf, 2);
+	if (retval < 0) {
+		printk("can't find bq27541\n");
+		goto batt_failed_2;
+	}else{
+		rk30_bat_unregister();
+		bq27541_init = 1;
+	}
 	
 	
 	retval = power_supply_register(&client->dev, &di->bat);

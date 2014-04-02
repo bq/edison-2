@@ -860,7 +860,7 @@ static struct reginfo *sensor_EffectSeqe[] = {sensor_Effect_Normal, sensor_Effec
 static  struct reginfo sensor_Exposure0[]=
 {
     {0xfe,0x01},
-    {0x13, 0x40}, //Y targe 
+    {0x13, 0x28}, //Y targe
     {0xfe,0x00}, 
     {0x00, 0x00}
 };
@@ -868,7 +868,7 @@ static  struct reginfo sensor_Exposure0[]=
 static  struct reginfo sensor_Exposure1[]=
 {
     {0xfe,0x01},
-    {0x13, 0x48}, //Y targe 
+    {0x13, 0x38}, //Y targe
     {0xfe,0x00},
     {0x00, 0x00}
 };
@@ -876,7 +876,7 @@ static  struct reginfo sensor_Exposure1[]=
 static  struct reginfo sensor_Exposure2[]=
 {
      {0xfe,0x01},
-     {0x13, 0x50}, //Y targe 
+     {0x13, 0x48}, //Y targe
      {0xfe,0x00}, 
      {0x00, 0x00}
 };
@@ -884,7 +884,7 @@ static  struct reginfo sensor_Exposure2[]=
 static  struct reginfo sensor_Exposure3[]=
 {
     {0xfe,0x01},
-    {0x13, 0x58}, //Y targe 
+    {0x13, 0x58}, //Y targe
     {0xfe,0x00},
     {0x00, 0x00}
 };
@@ -892,7 +892,7 @@ static  struct reginfo sensor_Exposure3[]=
 static  struct reginfo sensor_Exposure4[]=
 {
     {0xfe,0x01},
-    {0x13, 0x60}, //Y targe 
+    {0x13, 0x68}, //Y targe
     {0xfe,0x00}, 
     {0x00, 0x00}
 };
@@ -900,7 +900,7 @@ static  struct reginfo sensor_Exposure4[]=
 static  struct reginfo sensor_Exposure5[]=
 {
 	{0xfe,0x01},
-      {0x13, 0x68}, //Y targe 
+      {0x13, 0x78}, //Y targe
       {0xfe,0x00}, 
      {0x00, 0x00}
 };
@@ -908,7 +908,7 @@ static  struct reginfo sensor_Exposure5[]=
 static  struct reginfo sensor_Exposure6[]=
 {
     {0xfe,0x01},
-    {0x13, 0x70}, //Y targe 
+    {0x13, 0x88}, //Y targe
     {0xfe,0x00},
     {0x00, 0x00}
 };

@@ -1199,7 +1199,7 @@ int inv_mpu_register_slave(struct module *slave_module,
 	}
 
 	if (slave_descr->type == EXT_SLAVE_TYPE_ACCEL &&
-	    slave_descr->id == ACCEL_ID_MPU6050_1 &&
+	    slave_descr->id == ACCEL_ID_MPU6050 &&
 	    slave_descr->config) {
 		/* pass a reference to the mldl_cfg data
 		   structure to the mpu6050 accel "class" */
@@ -1478,7 +1478,7 @@ static int mpu_remove(struct i2c_client *client)
 
 	if (mldl_cfg->slave[EXT_SLAVE_TYPE_ACCEL] &&
 		(mldl_cfg->slave[EXT_SLAVE_TYPE_ACCEL]->id ==
-			ACCEL_ID_MPU6050_1)) {
+			ACCEL_ID_MPU6050)) {
 		struct ext_slave_platform_data *slave_pdata =
 			mldl_cfg->pdata_slave[EXT_SLAVE_TYPE_ACCEL];
 		inv_mpu_unregister_slave(

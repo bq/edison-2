@@ -240,6 +240,7 @@ struct rk29camera_gpio_res {
 	unsigned int gpio_torch;
 	unsigned int gpio_flag;
 	unsigned int gpio_init;
+	enum rk29camera_vdd_val vdd_val;
 	const char *dev_name;
 };
 
@@ -284,6 +285,7 @@ struct rk29camera_platform_data {
     int (*io_deinit)(int sensor);
     int (*iomux)(int pin);
 	int (*sensor_ioctrl)(struct device *dev,enum rk29camera_ioctrl_cmd cmd,int on);
+	void (*sensor_all_power)(int on,enum rk29camera_vdd_val vdd_value);   // hhs_0619
 	rk_sensor_user_init_data_s* sensor_init_data[RK_CAM_NUM];
 	struct rk29camera_gpio_res gpio_res[RK_CAM_NUM];
 	struct rk29camera_mem_res meminfo;

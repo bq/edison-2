@@ -1239,7 +1239,7 @@ int rk_fb_register(struct rk_lcdc_device_driver *dev_drv,
 	    if(fb_prepare_logo(fb_inf->fb[0], FB_ROTATE_UR)) {
 	        /* Start display and show logo on boot */
 	        fb_set_cmap(&fb_inf->fb[0]->cmap, fb_inf->fb[0]);
-#ifdef CONFIG_POWER_ON_CHARGER_DISPLAY
+#if	defined(CONFIG_POWER_ON_CHARGER_DISPLAY) && !defined(CONFIG_MALATA_D9001)
 		if((get_boot_source() != 2) || (board_boot_mode() == BOOT_MODE_REBOOT)){
 			if(!low_usb_charging())
 			fb_show_logo(fb_inf->fb[0], FB_ROTATE_UR);

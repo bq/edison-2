@@ -77,6 +77,7 @@
 
 static const char g_filename[]="/system/vendor/bq27410.dffs";
 static struct proc_dir_entry *bq27410_proc_entry;
+static int bq27410_cap = 0;
 int  g_bq27410_mode = BQ27410_NORMAL_MODE;
 int g_bq27410_fw_init_flag = 0;
 struct mutex g_bq27410_mutex;
@@ -88,6 +89,10 @@ extern bool is_accharging(void);
 extern bool is_usbcharging(void);
 extern void kernel_power_off(void);
 extern volatile bool low_usb_charge;
+extern void rk30_bat_unregister(void);
+extern int bq27410_init = 0;
+
+
 
 struct bq27410_platform_data *g_pdata;
 struct i2c_client *g_client;
@@ -359,6 +364,7 @@ static int bq27410_battery_rsoc(struct bq27410_device_info *di)
 			(g_pdata->capacity_max - g_pdata->capacity_min) / 2)
 			/ (g_pdata->capacity_max - g_pdata->capacity_min);
 	}
+	bq27410_cap = rsoc;
 
 	/*check full flags,if not full, show 99%*/
 	ret = bq27410_read(di->client,BQ27410_REG_FLAGS, buf, 2);
@@ -370,7 +376,7 @@ static int bq27410_battery_rsoc(struct bq27410_device_info *di)
 	flags = get_unaligned_le16(buf);
 	DBG("Enter:%s %d--flags = 0x%x\n",__FUNCTION__,__LINE__,flags);
 
-	if (flags & BQ27410_FLAG_FC)
+	if ((bq27410_cap > 99) && (flags & BQ27410_FLAG_FC))
 		status = POWER_SUPPLY_STATUS_FULL;
 
 	if(status != POWER_SUPPLY_STATUS_FULL)
@@ -1151,6 +1157,7 @@ static int bq27410_battery_probe(struct i2c_client *client,
 {
 	struct bq27410_device_info *di;
 	int retval = 0;
+	u8 buf[2];
 	struct bq27410_platform_data *pdata;
 	
 	DBG("**********  bq27410_battery_probe**************  \n");
@@ -1198,10 +1205,18 @@ static int bq27410_battery_probe(struct i2c_client *client,
 		pdata->io_init();
 
 	bq27410_di = di;
+	retval = bq27410_read(client,0x00,buf,2);
+	if(retval < 0){
+		printk("failed to find bq27410\n");
+		goto batt_failed_2;
+	}else{
+		rk30_bat_unregister();
+		bq27410_init = 1;
+	}
 
 	//command batt insert.
 	bq27410_write_batt_insert(client);
-	battery_capacity_check(di);
+
 	if(g_bq27410_mode == BQ27410_NORMAL_MODE){
 
 		if(!bq27410_read_control_status(client))
@@ -1264,7 +1279,9 @@ static int bq27410_battery_probe(struct i2c_client *client,
 		bq27410_proc_entry->write_proc = bq27410_update_write;
 		bq27410_proc_entry->read_proc = bq27410_update_read;
 	}
-	
+
+	battery_capacity_check(di);
+
 	return 0;
 
 batt_failed_4:

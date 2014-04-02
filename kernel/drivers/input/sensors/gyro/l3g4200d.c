@@ -216,7 +216,7 @@ static int sensor_report_value(struct i2c_client *client)
 struct sensor_operate gyro_l3g4200d_ops = {
 	.name				= "l3g4200d",
 	.type				= SENSOR_TYPE_GYROSCOPE,//sensor type and it should be correct
-	.id_i2c				= GYRO_ID_L3G4200D,		//i2c id number
+	.id_i2c				= GYRO_ID_L3G4200D_l,		//i2c id number
 	.read_reg			= GYRO_DATA_REG,		//read data
 	.read_len			= 6,				//data length
 	.id_reg				= GYRO_WHO_AM_I,		//read device id from this register

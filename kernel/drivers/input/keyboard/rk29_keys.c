@@ -149,6 +149,42 @@ static ssize_t rk29key_set(struct device *dev,
 
 static DEVICE_ATTR(rk29key,0660, NULL, rk29key_set);
 
+static ssize_t key_set(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct rk29_keys_platform_data *pdata = dev_get_platdata(dev);
+	int i;
+	int state;
+	struct rk29_keys_button *button;
+	unsigned int type = EV_KEY;
+
+	if (!input_dev)
+		return count;
+
+	for (i = 0; i < pdata->nbuttons; i++) {
+		if (strcmp(pdata->buttons[i].desc, "play") == 0)
+			break;
+	}
+	if (i == pdata->nbuttons)
+		return count;
+
+	button = &pdata->buttons[i];
+
+	if(button->gpio != INVALID_GPIO)
+		state = !!((gpio_get_value(button->gpio) ? 1 : 0) ^ button->active_low);
+	else
+		state = !!button->adc_state;
+	if(state) {
+		printk("wake report key presss again!!!\n");
+		input_event(input_dev, type, button->code, state);
+		input_sync(input_dev);
+	}
+	printk("key_set state:%d\n", state);
+	return count;
+
+}
+
+static DEVICE_ATTR(key_set,0666, NULL, key_set);
 void rk29_send_power_key(int state)
 {
 	if (!input_dev)
@@ -298,9 +334,12 @@ static void callback(struct adc_client *client, void *client_param, int result)
 			button->adc_state = 1;
 		else
 			button->adc_state = 0;
-		if(bdata->state != button->adc_state)
-			mod_timer(&bdata->timer,
-				jiffies + msecs_to_jiffies(DEFAULT_DEBOUNCE_INTERVAL));
+		if(button->adc_oldstate != button->adc_state)
+			{
+				button->adc_oldstate=button->adc_state;
+				mod_timer(&bdata->timer,
+					jiffies + msecs_to_jiffies(DEFAULT_DEBOUNCE_INTERVAL));
+			}
 	}
 	return;
 }
@@ -440,6 +479,9 @@ static int __devinit keys_probe(struct platform_device *pdev)
 	error = device_create_file(dev, &dev_attr_get_adc_value);
 
 	error = device_create_file(dev, &dev_attr_rk29key);
+
+	error = device_create_file(dev, &dev_attr_key_set);
+
 	if(error )
 	{
 		pr_err("failed to create key file error: %d\n", error);
@@ -497,15 +539,20 @@ static int keys_suspend(struct device *dev)
 {
 	struct rk29_keys_platform_data *pdata = dev_get_platdata(dev);
 	struct rk29_keys_drvdata *ddata = dev_get_drvdata(dev);
-	int i;
+	int i, type;
 
 	ddata->in_suspend = true;
 
 	if (device_may_wakeup(dev)) {
 		for (i = 0; i < pdata->nbuttons; i++) {
 			struct rk29_keys_button *button = &pdata->buttons[i];
+			struct rk29_button_data *bdata = &ddata->data[i];
 			if (button->wakeup) {
 				int irq = gpio_to_irq(button->gpio);
+				if(strcmp(button->desc,"hall") == 0){
+					type = (!!gpio_get_value(button->gpio))?IRQF_TRIGGER_FALLING : IRQF_TRIGGER_RISING;
+					irq_set_irq_type(irq, type);
+				}
 				enable_irq_wake(irq);
 			}
 		}
@@ -518,13 +565,18 @@ static int keys_resume(struct device *dev)
 {
 	struct rk29_keys_platform_data *pdata = dev_get_platdata(dev);
 	struct rk29_keys_drvdata *ddata = dev_get_drvdata(dev);
-	int i;
+	int i, type;
 
 	if (device_may_wakeup(dev)) {
 		for (i = 0; i < pdata->nbuttons; i++) {
 			struct rk29_keys_button *button = &pdata->buttons[i];
+			struct rk29_button_data *bdata = &ddata->data[i];
 			if (button->wakeup) {
 				int irq = gpio_to_irq(button->gpio);
+				if(strcmp(button->desc,"hall") == 0){
+					type = (!!gpio_get_value(button->gpio))?IRQF_TRIGGER_FALLING : IRQF_TRIGGER_RISING;
+					irq_set_irq_type(irq, type);
+				}
 				disable_irq_wake(irq);
 			}
 		}

@@ -407,6 +407,9 @@ config BATTERY_BT_C0B5H
 
 config BATTERY_BT_D001_386789
         bool "BT-D9001 5400mA"
+
+config BATTERY_BT_C0B5
+        bool "BT-C0B5 3200mA"
 endchoice
 
 config POWER_ON_CHARGER_DISPLAY

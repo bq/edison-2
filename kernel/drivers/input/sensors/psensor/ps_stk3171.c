@@ -223,7 +223,7 @@ static int sensor_report_value(struct i2c_client *client)
 struct sensor_operate proximity_stk3171_ops = {
 	.name				= "ps_stk3171",
 	.type				= SENSOR_TYPE_PROXIMITY,	//sensor type and it should be correct
-	.id_i2c				= PROXIMITY_ID_STK3171,		//i2c id number
+	.id_i2c				= PROXIMITY_ID_STK3171_l,		//i2c id number
 	.read_reg			= PS_DT,			//read data
 	.read_len			= 1,				//data length
 	.id_reg				= SENSOR_UNKNOW_DATA,		//read device id from this register

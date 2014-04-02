@@ -295,7 +295,7 @@ static int sensor_report_value(struct i2c_client *client)
 struct sensor_operate gsensor_lis3dh_ops = {
 	.name				= "lis3dh",
 	.type				= SENSOR_TYPE_ACCEL,		//sensor type and it should be correct
-	.id_i2c				= ACCEL_ID_LIS3DH,		//i2c id number
+	.id_i2c				= ACCEL_ID_LIS3DH_l,		//i2c id number
 	.read_reg			= (LIS3DH_OUT_X_L | 0x80),	//read data
 	.read_len			= 6,				//data length
 	.id_reg				= LIS3DH_WHO_AM_I,		//read device id from this register

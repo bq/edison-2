@@ -134,6 +134,13 @@ static int rk30_modem_probe(struct platform_device *pdev)
 	return 0;
 }
 
+int rk30_set_modem_suspend()
+{
+	gpio_direction_output(RK30_3G_SUSPEND, GPIO_LOW);
+	return 0;
+}
+EXPORT_SYMBOL(rk30_modem_suspend);
+
 static int rk30_modem_suspend(struct platform_device *pdev, pm_message_t state)
 {
 //    printk("rk30_modem_suspend\n");

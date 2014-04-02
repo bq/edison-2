@@ -45,6 +45,9 @@ extern bool is_accharging(void);
 extern bool is_usbcharging(void);
 extern void kernel_power_off(void);
 int __weak get_boot_source(void){}
+#ifdef CONFIG_RK29_SUPPORT_MODEM
+extern int rk30_set_modem_suspend(void);
+#endif
 
 static int __init pwr_on_thrsd_setup(char *str)
 {
@@ -116,8 +119,11 @@ static int  __init start_charge_logo_display(void)
 	list_for_each_entry(psy, &rk_psy_head, rk_psy_node)
 	{
 		psy->get_property(psy,POWER_SUPPLY_PROP_ONLINE,&val_status);
-		
-		online += val_status.intval;
+
+		if (val_status.intval != 0) {
+			if ((psy->type == POWER_SUPPLY_TYPE_USB) || (psy->type == POWER_SUPPLY_TYPE_MAINS))
+				online++;
+		}
 
 		psy->get_property(psy,POWER_SUPPLY_PROP_CAPACITY,&val_capacity); 
 	}
@@ -168,6 +174,9 @@ static int  __init start_charge_logo_display(void)
 	    {
 	        if(is_accharging() || is_usbcharging())	//check is charging mode
 			add_bootmode_charger_to_cmdline();
+			#ifdef CONFIG_RK29_SUPPORT_MODEM
+			rk30_set_modem_suspend();
+			#endif
 			//boot_mode_init("charge");
 			printk("power in charge mode\n");
 		}

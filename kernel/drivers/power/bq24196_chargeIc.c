@@ -57,12 +57,12 @@ static int bq24196_write(struct i2c_client *client, u8 reg, u8 const buf[], unsi
 static ssize_t bat_param_read(struct device *dev,struct device_attribute *attr, char *buf)
 {
 	int i;
-	u16 buffer;
+	u8 buffer;
 	struct bq24196_device_info *di=bq24196_di;
 
 	for(i=0;i<11;i++)
 	{
-		bq24196_read(di->client,i,&buffer,2);
+		bq24196_read(di->client,i,&buffer,1);
 		printk("reg %d value %x\n",i,buffer);		
 	}
 	return 0;
@@ -72,9 +72,9 @@ DEVICE_ATTR(battparam, 0664, bat_param_read,NULL);
 static int bq24196_update_reg(struct i2c_client *client, int reg, u8 value, u8 mask )
 {
 	int ret =0;
-	u16 retval = 0;
+	u8 retval = 0;
 
-	ret = bq24196_read(client, reg, &retval, 2);
+	ret = bq24196_read(client, reg, &retval, 1);
 	if (ret < 0) {
 		dev_err(&client->dev, "%s: err %d\n", __func__, ret);
 		return ret;
@@ -82,7 +82,7 @@ static int bq24196_update_reg(struct i2c_client *client, int reg, u8 value, u8 m
 
 	if ((retval & mask) != value) {
 		retval = ((retval & ~mask) | value) | value;
-		ret = bq24196_write(client, reg, &retval, 2);
+		ret = bq24196_write(client, reg, &retval, 1);
 		if (ret < 0) {
 			dev_err(&client->dev, "%s: err %d\n", __func__, ret);
 			return ret;
@@ -95,10 +95,10 @@ static int bq24196_update_reg(struct i2c_client *client, int reg, u8 value, u8 m
 int get_charge_status()
 {
 	int flags=0,status,ret;
-	u16 buf;
+	u8 buf;
 	struct bq24196_device_info *di=bq24196_di;
 
-	ret = bq24196_read(di->client, SYSTEM_STATS_REGISTER, &buf, 2);
+	ret = bq24196_read(di->client, SYSTEM_STATS_REGISTER, &buf, 1);
 	if (ret < 0) {
 		dev_err(di->dev, "error reading flags\n");
 		return ret;
@@ -119,10 +119,10 @@ EXPORT_SYMBOL_GPL(get_charge_status);
 int is_usb_charging()
 {
 	int flags=0,status,ret;
-	u16 buf;
+	u8 buf;
 	struct bq24196_device_info *di=bq24196_di;
 
-	ret = bq24196_read(di->client, SYSTEM_STATS_REGISTER, &buf, 2);
+	ret = bq24196_read(di->client, SYSTEM_STATS_REGISTER, &buf, 1);
 	if (ret < 0) {
 		dev_err(di->dev, "error reading flags\n");
 		return ret;
@@ -180,7 +180,7 @@ static int bq24196_init_registers(void)
 	/* Set Termination Current Limit as 128mA */
 	ret = bq24196_update_reg(bq24196_di->client,
 				PRE_CHARGE_TERMINATION_CURRENT_CONTROL_REGISTER,
-				TERMINATION_CURRENT_LIMIT_256MA << TERMINATION_CURRENT_LIMIT_OFFSET,
+				TERMINATION_CURRENT_LIMIT_128MA << TERMINATION_CURRENT_LIMIT_OFFSET,
 				TERMINATION_CURRENT_LIMIT_MASK << TERMINATION_CURRENT_LIMIT_OFFSET);
 	if (ret < 0) {
 		dev_err(&bq24196_di->client->dev, "%s(): Failed to set termination limit 128mA \n",
@@ -316,9 +316,9 @@ static int bq24196_update_otg_mode_current(u8 value)
 static int bq24196_otg_mode_current_check(void)
 {
 	int ret =0, flag, status;
-	u16 retval = 0;
+	u8 retval = 0;
 
-	ret = bq24196_read(bq24196_di->client, FAULT_STATS_REGISTER, &retval, 2);
+	ret = bq24196_read(bq24196_di->client, FAULT_STATS_REGISTER, &retval, 1);
 	if (ret < 0) {
 		dev_err(&bq24196_di->client->dev, "%s: err %d\n", __func__, ret);
 		return ret;
@@ -413,7 +413,7 @@ static int bq24196_battery_probe(struct i2c_client *client,
 				 const struct i2c_device_id *id)
 {
 	struct bq24196_device_info *di;
-	u16 retval = 0;
+	u8 retval = 0;
 	struct bq24196_platform_data *pdata;
 	int ret;
 	int irq, irq_flag;
@@ -457,7 +457,7 @@ static int bq24196_battery_probe(struct i2c_client *client,
 #endif
 
 	/* get the vendor id */
-	ret = bq24196_read(di->client, VENDOR_STATS_REGISTER, &retval, 2);
+	ret = bq24196_read(di->client, VENDOR_STATS_REGISTER, &retval, 1);
 	if (ret < 0) {
 		dev_err(&di->client->dev, "%s(): Failed in reading register"
 				"0x%02x\n", __func__, VENDOR_STATS_REGISTER);

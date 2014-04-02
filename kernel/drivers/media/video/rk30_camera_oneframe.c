@@ -3116,8 +3116,9 @@ static int rk_camera_probe(struct platform_device *pdev)
     pcdev->soc_host.priv		= pcdev;
     pcdev->soc_host.v4l2_dev.dev	= &pdev->dev;
     pcdev->soc_host.nr		= pdev->id;
-
+	pcdev->pdata->sensor_all_power(1,VDD_18V);   //  hhs_0619
     err = soc_camera_host_register(&pcdev->soc_host);
+	 pcdev->pdata->sensor_all_power(0,VDD_18V);   //  hhs_0619
     if (err)
         goto exit_free_irq;
 	pcdev->fps_timer.pcdev = pcdev;

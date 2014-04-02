@@ -200,13 +200,13 @@ struct rt5631_init_reg {
 #elif defined(CONFIG_MALATA_C7011)
 #define DEF_VOL_SPK				0xcc
 #elif defined(CONFIG_MALATA_D7006)  ||defined(CONFIG_MALATA_D7007)
-#define DEF_VOL_SPK				0xcb
+#define DEF_VOL_SPK				0xca
 #elif defined(CONFIG_MALATA_D8005)
-#define DEF_VOL_SPK				0xcb
+#define DEF_VOL_SPK				0xca
 #elif defined(CONFIG_MALATA_D7008)
-#define DEF_VOL_SPK				0xcb
+#define DEF_VOL_SPK				0xca
 #else
-#define DEF_VOL_SPK				0xc8
+#define DEF_VOL_SPK				0xca
 #endif
 #endif
 
@@ -233,13 +233,17 @@ static struct rt5631_init_reg init_list[] = {
 	//{RT5631_STEREO_DAC_VOL_1	, 0x004C},
 #if defined(CONFIG_MALATA_C7011)
 	{RT5631_STEREO_DAC_VOL_2	, 0x0303},
+#elif defined(CONFIG_MALATA_C1016)
+	{RT5631_STEREO_DAC_VOL_2	, 0x0808},
 #else
-	{RT5631_STEREO_DAC_VOL_2	, 0x0101},
+	{RT5631_STEREO_DAC_VOL_2	, 0x0000},
 #endif
 	{RT5631_ADC_REC_MIXER		, 0xb0f0},//Record Mixer source from Mic1 by default
 	{RT5631_ADC_CTRL_1		, 0x8086},//STEREO ADC CONTROL 1
-#ifdef CONFIG_MALATA_C7011
-	{RT5631_MIC_CTRL_2		, 0x3300},//Mic1/Mic2 boost 40DB by default
+#if defined(CONFIG_MALATA_C7011)
+	{RT5631_MIC_CTRL_2		, 0x3300},//Mic1/Mic2 boost 30DB by default
+#elif defined(CONFIG_MALATA_D9001)
+	{RT5631_MIC_CTRL_2		, 0x2200},//Mic1/Mic2 boost 25DB by default
 #else
 	{RT5631_MIC_CTRL_2		, 0x4400},//Mic1/Mic2 boost 35DB by default
 #endif
@@ -273,7 +277,14 @@ static struct rt5631_init_reg init_list[] = {
 #else
 	{RT5631_SPK_MONO_OUT_CTRL	, 0x6c00},//Speaker volume-->SPOMixer(L-->L,R-->R)
 #endif
+
+#if defined(CONFIG_MALATA_C1016)
+	{RT5631_GEN_PUR_CTRL_REG	, 0x6e00},//Speaker AMP ratio gain is 1.99x
+#elif defined(CONFIG_MALATA_D7006)  ||defined(CONFIG_MALATA_D7007) || defined(CONFIG_MALATA_D8005) || defined(CONFIG_MALATA_D7008)
+	{RT5631_GEN_PUR_CTRL_REG	, 0x1e00},//Speaker AMP ratio gain is 1.09x
+#else
 	{RT5631_GEN_PUR_CTRL_REG	, 0x4e00},//Speaker AMP ratio gain is 1.27x
+#endif
 //#if defined(CONFIG_ADJUST_VOL_BY_CODEC)
 	{RT5631_SPK_MONO_HP_OUT_CTRL	, 0x0000},//HP from outputmixer,speaker out from SpeakerOut Mixer	
 //#else
@@ -2454,7 +2465,8 @@ void codec_set_spk(bool on)
 	mutex_lock(&codec->mutex);
 	if(on){
 		DBG("inter spk open\n");
-#ifdef CONFIG_MALATA_C7011
+#if defined(CONFIG_MALATA_C7011)  ||  defined(CONFIG_MALATA_D7007)  ||  defined(CONFIG_MALATA_D7006) \
+|| defined(CONFIG_MALATA_D8002) ||  defined(CONFIG_MALATA_D7008) || defined(CONFIG_MALATA_D8005)
 		rt5631_write_mask(rt5631_codec, RT5631_SPK_MONO_OUT_CTRL, 0x3c00, 0xfc00);
 #else
 		rt5631_write_mask(rt5631_codec, RT5631_SPK_MONO_OUT_CTRL, 0x6c00, 0xfc00);

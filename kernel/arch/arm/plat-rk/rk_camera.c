@@ -513,7 +513,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
     .io_deinit = rk_sensor_io_deinit,
     .iomux = rk_sensor_iomux,
     .sensor_ioctrl = rk_sensor_ioctrl,
-    
+    .sensor_all_power = rk_cif_power,  // hhs_0619
     .gpio_res = {
         {
 		#ifdef CONFIG_SENSOR_0
@@ -526,6 +526,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_0|CONFIG_SENSOR_FLASHACTIVE_LEVEL_0|CONFIG_SENSOR_TORCHACTIVE_LEVEL_0),
             .gpio_init = 0,            
             .dev_name = SENSOR_DEVICE_NAME_0,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_0,
             #else
 	      .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -549,6 +550,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_01|CONFIG_SENSOR_FLASHACTIVE_LEVEL_01|CONFIG_SENSOR_TORCHACTIVE_LEVEL_01),
             .gpio_init = 0,            
             .dev_name = SENSOR_DEVICE_NAME_01,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_01,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -573,6 +575,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_02|CONFIG_SENSOR_FLASHACTIVE_LEVEL_02|CONFIG_SENSOR_TORCHACTIVE_LEVEL_02),
             .gpio_init = 0,            
             .dev_name = SENSOR_DEVICE_NAME_02, 
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_02,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -598,6 +601,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_03|CONFIG_SENSOR_FLASHACTIVE_LEVEL_03|CONFIG_SENSOR_TORCHACTIVE_LEVEL_03),
             .gpio_init = 0,            
             .dev_name = SENSOR_DEVICE_NAME_03, 
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_03,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -622,6 +626,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_04|CONFIG_SENSOR_FLASHACTIVE_LEVEL_04|CONFIG_SENSOR_TORCHACTIVE_LEVEL_04),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_04,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_04,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -644,6 +649,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_1|CONFIG_SENSOR_FLASHACTIVE_LEVEL_1|CONFIG_SENSOR_TORCHACTIVE_LEVEL_1),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_1,
+             .vdd_val = CONFIG_SENSOR_DVDD_VALUE_1,
             #else
 	      .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -668,6 +674,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_11|CONFIG_SENSOR_FLASHACTIVE_LEVEL_11|CONFIG_SENSOR_TORCHACTIVE_LEVEL_11),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_11,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_11,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -692,6 +699,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_12|CONFIG_SENSOR_FLASHACTIVE_LEVEL_12|CONFIG_SENSOR_TORCHACTIVE_LEVEL_12),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_12,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_12,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -716,6 +724,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_13|CONFIG_SENSOR_FLASHACTIVE_LEVEL_13|CONFIG_SENSOR_TORCHACTIVE_LEVEL_13),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_13,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_13,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -740,6 +749,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_14|CONFIG_SENSOR_FLASHACTIVE_LEVEL_14|CONFIG_SENSOR_TORCHACTIVE_LEVEL_14),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_14,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_14,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -764,6 +774,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_15|CONFIG_SENSOR_FLASHACTIVE_LEVEL_15|CONFIG_SENSOR_TORCHACTIVE_LEVEL_15),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_15,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_15,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -788,6 +799,7 @@ static struct rk29camera_platform_data rk_camera_platform_data = {
             |CONFIG_SENSOR_POWERDNACTIVE_LEVEL_16|CONFIG_SENSOR_FLASHACTIVE_LEVEL_16|CONFIG_SENSOR_TORCHACTIVE_LEVEL_16),
             .gpio_init = 0,
             .dev_name = SENSOR_DEVICE_NAME_16,
+            .vdd_val = CONFIG_SENSOR_DVDD_VALUE_16,
         #else
             .gpio_reset = INVALID_GPIO,
             .gpio_power = INVALID_GPIO,
@@ -2112,7 +2124,6 @@ static int rk_sensor_ioctrl(struct device *dev,enum rk29camera_ioctrl_cmd cmd, i
 {
     struct rk29camera_gpio_res *res = NULL;    
 	int ret = RK29_CAM_IO_SUCCESS,i = 0;
-
 	struct rk29camera_platform_data* plat_data = &rk_camera_platform_data;
 	//for test reg
 	for(i = 0;i < RK_CAM_NUM;i++){
@@ -2133,10 +2144,10 @@ static int rk_sensor_ioctrl(struct device *dev,enum rk29camera_ioctrl_cmd cmd, i
  		case Cam_Power:
 		{
 			if (sensor_ioctl_cb.sensor_power_cb) {
-				if(strcmp("sid130B_front_4", dev_name(dev)) )
-					ret = sensor_ioctl_cb.sensor_power_cb(res, on,VDD_18V);
+				if(res->vdd_val == VDD_15V)
+				ret = sensor_ioctl_cb.sensor_power_cb(res, on,VDD_15V);
 				else
-					ret = sensor_ioctl_cb.sensor_power_cb(res, on,VDD_15V);	
+				ret = sensor_ioctl_cb.sensor_power_cb(res, on,VDD_18V);	
 			} else {
                 printk(KERN_ERR "sensor_ioctl_cb.sensor_power_cb is NULL");
                 WARN_ON(1);

@@ -256,7 +256,7 @@ static int sensor_report_value(struct i2c_client *client)
 struct sensor_operate gsensor_mma8452_ops = {
 	.name				= "mma8452",
 	.type				= SENSOR_TYPE_ACCEL,			//sensor type and it should be correct
-	.id_i2c				= ACCEL_ID_MMA845X,			//i2c id number
+	.id_i2c				= ACCEL_ID_MMA845X_l,			//i2c id number
 	.read_reg			= MMA8452_REG_X_OUT_MSB,		//read data
 	.read_len			= 6,					//data length
 	.id_reg				= MMA8452_REG_WHO_AM_I,			//read device id from this register

@@ -227,7 +227,7 @@ static int sensor_report_value(struct i2c_client *client)
 struct sensor_operate light_stk3171_ops = {
 	.name				= "ls_isl29023",
 	.type				= SENSOR_TYPE_LIGHT,	//sensor type and it should be correct
-	.id_i2c				= LIGHT_ID_ISL29023,	//i2c id number
+	.id_i2c				= LIGHT_ID_ISL29023_l,	//i2c id number
 	.read_reg			= ISL29023_REG_ADD_DATA_LSB,		//read data
 	.read_len			= 2,			//data length
 	.id_reg				= SENSOR_UNKNOW_DATA,	//read device id from this register

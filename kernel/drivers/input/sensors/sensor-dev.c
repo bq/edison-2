@@ -44,7 +44,7 @@
 #endif
 
 struct sensor_private_data *g_sensor[SENSOR_NUM_TYPES];
-static struct sensor_operate *sensor_ops[SENSOR_NUM_ID]; 
+static struct sensor_operate *sensor_ops[SENSOR_NUM_ID_l]; 
 static struct class *g_sensor_class[SENSOR_NUM_TYPES];
 
 
@@ -1120,7 +1120,7 @@ int sensor_register_slave(int type,struct i2c_client *client,
 {
 	int result = 0;
 	struct sensor_operate *ops = get_sensor_ops();
-	if((ops->id_i2c >= SENSOR_NUM_ID) || (ops->id_i2c <= ID_INVALID))
+	if((ops->id_i2c >= SENSOR_NUM_ID_l) || (ops->id_i2c <= ID_INVALID_l))
 	{	
 		printk("%s:%s id is error %d\n", __func__, ops->name, ops->id_i2c);
 		return -1;	
@@ -1137,7 +1137,7 @@ int sensor_unregister_slave(int type,struct i2c_client *client,
 {
 	int result = 0;
 	struct sensor_operate *ops = get_sensor_ops();
-	if((ops->id_i2c >= SENSOR_NUM_ID) || (ops->id_i2c <= ID_INVALID))
+	if((ops->id_i2c >= SENSOR_NUM_ID_l) || (ops->id_i2c <= ID_INVALID_l))
 	{	
 		printk("%s:%s id is error %d\n", __func__, ops->name, ops->id_i2c);
 		return -1;	
@@ -1185,7 +1185,7 @@ int sensor_probe(struct i2c_client *client, const struct i2c_device_id *devid)
 		goto out_no_free;	
 	}
 
-	if(((int)devid->driver_data >= SENSOR_NUM_ID) || ((int)devid->driver_data <= ID_INVALID))
+	if(((int)devid->driver_data >= SENSOR_NUM_ID_l) || ((int)devid->driver_data <= ID_INVALID_l))
 	{	
 		dev_err(&client->adapter->dev, "sensor id is error %d\n", (int)devid->driver_data);
 		result = -EFAULT;
@@ -1395,36 +1395,36 @@ static int sensor_remove(struct i2c_client *client)
 
 static const struct i2c_device_id sensor_id[] = {
 	/*gsensor*/
-	{"gsensor", ACCEL_ID_ALL},
-	{"gs_mma8452", ACCEL_ID_MMA845X},	
-	{"gs_kxtik", ACCEL_ID_KXTIK},
-	{"gs_lis3dh", ACCEL_ID_LIS3DH},
-	{"gs_mma7660", ACCEL_ID_MMA7660},
-	{"gs_mxc6225", ACCEL_ID_MXC6225},
+	{"gsensor", ACCEL_ID_ALL_l},
+	{"gs_mma8452", ACCEL_ID_MMA845X_l},	
+	{"gs_kxtik", ACCEL_ID_KXTIK_l},
+	{"gs_lis3dh", ACCEL_ID_LIS3DH_l},
+	{"gs_mma7660", ACCEL_ID_MMA7660_l},
+	{"gs_mxc6225", ACCEL_ID_MXC6225_l},
 	/*compass*/
-	{"compass", COMPASS_ID_ALL},
-	{"ak8975", COMPASS_ID_AK8975},
-	{"mmc314x", COMPASS_ID_MMC314X},
+	{"compass", COMPASS_ID_ALL_l},
+	{"ak8975", COMPASS_ID_AK8975_l},
+	{"mmc314x", COMPASS_ID_MMC314X_l},
 	/*gyroscope*/
-	{"gyro", GYRO_ID_ALL},	
-	{"l3g4200d_gryo", GYRO_ID_L3G4200D},
-	{"k3g", GYRO_ID_K3G},
+	{"gyro", GYRO_ID_ALL_l},	
+	{"l3g4200d_gryo", GYRO_ID_L3G4200D_l},
+	{"k3g", GYRO_ID_K3G_l},
 	/*light sensor*/
-	{"lightsensor", LIGHT_ID_LSL29023},
-	{"lightsensor", LIGHT_ID_ALL},	
-	{"light_cm3217", LIGHT_ID_CM3217},
-	{"light_al3006", LIGHT_ID_AL3006},
-	{"ls_stk3171", LIGHT_ID_STK3171},
-	{"ls_isl29023", LIGHT_ID_ISL29023},
-	{"ls_ap321xx", LIGHT_ID_AP321XX},
-	{"ls_lsl5151", LIGHT_ID_ISL5151},
+	{"lightsensor", LIGHT_ID_LSL29023_l},
+	{"lightsensor", LIGHT_ID_ALL_l},	
+	{"light_cm3217", LIGHT_ID_CM3217_l},
+	{"light_al3006", LIGHT_ID_AL3006_l},
+	{"ls_stk3171", LIGHT_ID_STK3171_l},
+	{"ls_isl29023", LIGHT_ID_ISL29023_l},
+	{"ls_ap321xx", LIGHT_ID_AP321XX_l},
+	{"ls_lsl5151", LIGHT_ID_ISL5151_l},
 	/*proximity sensor*/
-	{"psensor", PROXIMITY_ID_ALL},
-	{"proximity_al3006", PROXIMITY_ID_AL3006},	
-	{"ps_stk3171", PROXIMITY_ID_STK3171},
-	{"ps_ap321xx", PROXIMITY_ID_AP321XX},
+	{"psensor", PROXIMITY_ID_ALL_l},
+	{"proximity_al3006", PROXIMITY_ID_AL3006_l},	
+	{"ps_stk3171", PROXIMITY_ID_STK3171_l},
+	{"ps_ap321xx", PROXIMITY_ID_AP321XX_l},
 	/*temperature*/
-	{"temperature", TEMPERATURE_ID_ALL},
+	{"temperature", TEMPERATURE_ID_ALL_l},
 	{},
 };
 

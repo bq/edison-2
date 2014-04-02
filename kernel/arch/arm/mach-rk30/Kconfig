@@ -66,6 +66,12 @@ menuconfig MALATA_C7011
 
 menuconfig MALATA_D9001
 	bool "Malata D9001 Project"
+
+menuconfig MALATA_C7019A
+	bool "Malata C7019A Project"
+
+menuconfig MALATA_C7019B
+	bool "Malata C7019B Project"
 endif
 
 choice

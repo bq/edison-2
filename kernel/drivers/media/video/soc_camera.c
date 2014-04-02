@@ -1203,7 +1203,7 @@ static int soc_camera_probe(struct device *dev)
 	else if(hhs_pwn_pin == RK30_PIN1_PB7)
 		gpio_set_value(RK30_PIN1_PB6,pin_level);
 	// honghaishen_test hhs_1219 end
-	ret = soc_camera_power_set(icd, icl, 1);
+	//ret = soc_camera_power_set(icd, icl, 1);   // hhs_0619
 	if (ret < 0)
 		goto epower;
 
@@ -1285,8 +1285,8 @@ static int soc_camera_probe(struct device *dev)
 		dev_warn(&icd->dev, "Failed creating the control symlink\n");
 
 	ici->ops->remove(icd);
-
-	soc_camera_power_set(icd, icl, 0);
+        icl->powerdown(icd->pdev, 1);
+	//soc_camera_power_set(icd, icl, 0);    // hhs_0619
 
 	mutex_unlock(&icd->video_lock);
     printk("Probe %s success\n", dev_name(icd->pdev));
@@ -1308,7 +1308,8 @@ eadddev:
 evdc:
 	ici->ops->remove(icd);
 eadd:
-	soc_camera_power_set(icd, icl, 0);
+	icl->powerdown(icd->pdev, 1);
+// soc_camera_power_set(icd, icl, 0);    // hhs_0619
 epower:
 	regulator_bulk_free(icl->num_regulators, icl->regulators);
 ereg:

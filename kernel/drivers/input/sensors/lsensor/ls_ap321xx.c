@@ -367,7 +367,7 @@ static int sensor_report_value(struct i2c_client *client)
 struct sensor_operate light_ap321xx_ops = {
 	.name				= "ls_ap321xx",
 	.type				= SENSOR_TYPE_LIGHT,	//sensor type and it should be correct
-	.id_i2c				= LIGHT_ID_AP321XX,	//i2c id number
+	.id_i2c				= LIGHT_ID_AP321XX_l,	//i2c id number
 	.read_reg			= SENSOR_UNKNOW_DATA,	//read data		//there are two regs, we fix them in code.
 	.read_len			= 1,			//data length
 	.id_reg				= SENSOR_UNKNOW_DATA,	//read device id from this register   //there are 3 regs, we fix them in code.

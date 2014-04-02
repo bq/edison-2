@@ -89,6 +89,7 @@ static struct rk29_keys_button key_button[] = {
 		.active_low = PRESS_LEV_LOW,
 	},
 	#endif
+#if 0
 #ifndef RK3000_SDK
 	{
 		.desc	= "menu",
@@ -147,6 +148,7 @@ static struct rk29_keys_button key_button[] = {
 		.gpio = INVALID_GPIO,
 		.active_low = PRESS_LEV_LOW,
 	},
+#endif
 #endif
 };
 struct rk29_keys_platform_data rk29_keys_pdata = {

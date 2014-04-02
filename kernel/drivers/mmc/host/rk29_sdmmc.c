@@ -119,6 +119,8 @@ int debug_level = 5;
 #define RK29_MAX_SDIO_FREQ   25000000    //set max-sdio-frequency 25Mhz at the present time
 #endif
 
+int sdio_host = 0;
+
 enum {
 	EVENT_CMD_COMPLETE = 0,
 	EVENT_DATA_COMPLETE,
@@ -1578,7 +1580,7 @@ static int rk29_sdmmc_get_cd(struct mmc_host *mmc)
 
         	cdetect = rk29_sdmmc_read(host->regs, SDMMC_CDETECT);
 
-#if defined(CONFIG_MALATA_D7008) || defined(CONFIG_MALATA_D7007)
+#if defined(CONFIG_MALATA_D7008) || defined(CONFIG_MALATA_D7007) || defined(CONFIG_MALATA_C7019A) || defined(CONFIG_MALATA_C7019B)
             cdetect = (cdetect & SDMMC_CARD_DETECT_N)?1:0;
 #else
             cdetect = (cdetect & SDMMC_CARD_DETECT_N)?0:1;
@@ -3876,6 +3878,11 @@ static int rk29_sdmmc_probe(struct platform_device *pdev)
 
 
 	platform_set_drvdata(pdev, mmc); 	
+
+	if(strcmp(host->dma_name,"sdio") == 0)
+		sdio_host = 1;
+	else
+		sdio_host = 0;
 
 	mmc_add_host(mmc);
 
