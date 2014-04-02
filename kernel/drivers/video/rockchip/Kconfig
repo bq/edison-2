@@ -10,7 +10,6 @@ menuconfig FB_ROCKCHIP
 config FB_MIRRORING
 	bool     "Mirroring support"
 	depends on FB_ROCKCHIP
-
 choice
         bool "Dual display ploy select"
 	depends on FB_ROCKCHIP
@@ -58,25 +57,10 @@ config THREE_FB_BUFFER
            select y if android support three buffer,like Jelly Bean
 
 
-config LCDC_RK30
-        tristate "rk30 lcdc support "
-        depends on FB_ROCKCHIP
-        help
-          Driver for rk30 lcdc .There are two lcd controllers on rk30
-
-config LCDC0_RK30
-	bool "lcdc0 support"
-	depends on LCDC_RK30
-	default y
-	help 
-	   Support rk30 lcdc0 if you say y here
-
-config LCDC1_RK30
-        bool "lcdc1 support"
-        depends on LCDC_RK30
-        default y if HDMI_RK30
-        help
-           Support rk30 lcdc1 if you say y here
-
+source "drivers/video/rockchip/lcdc/Kconfig"
+source "drivers/video/rockchip/screen/Kconfig"
+source "drivers/video/rockchip/transmitter/Kconfig"
 source "drivers/video/rockchip/hdmi/Kconfig"
+source "drivers/video/rockchip/tve/Kconfig"
 source "drivers/video/rockchip/rga/Kconfig"
+

@@ -7,7 +7,8 @@
 #include <linux/adc.h>
 #include "adc_priv.h"
 
-struct list_head adc_host_head;
+struct adc_host *g_adc = NULL;
+static LIST_HEAD(adc_host_head);
 
 struct adc_host *adc_alloc_host(struct device *dev, int extra, enum host_chn_mask mask)
 {
@@ -45,6 +46,8 @@ struct adc_client *adc_register(int chn,
         struct adc_client *client = NULL;
         struct adc_host *adc = NULL;
 
+        if(chn < 0)
+                return NULL;
         list_for_each_entry(adc, &adc_host_head, entry) {
                 if((chn == 0 && adc->mask == SARADC_CHN_MASK) ||
                 (chn & adc->mask)){
@@ -65,6 +68,7 @@ struct adc_client *adc_register(int chn,
         dev_err(adc->dev, "chn(%d) is not support\n", chn);
         return NULL;
 }
+EXPORT_SYMBOL(adc_register);
 
 void adc_unregister(struct adc_client *client)
 {
@@ -75,6 +79,7 @@ void adc_unregister(struct adc_client *client)
 	client = NULL;
 	return;
 }
+EXPORT_SYMBOL(adc_unregister);
 
 static inline void trigger_next_adc_job_if_any(struct adc_host *adc)
 {
@@ -113,6 +118,7 @@ adc_sync_read_callback(struct adc_client *client, void *param, int result)
 {
         client->result = result;
 }
+
 static void adc_callback(struct adc_host *adc)
 {
         struct adc_request *req = NULL, *n = NULL;
@@ -131,6 +137,7 @@ static void adc_callback(struct adc_host *adc)
                 kfree(req);
         }
 }
+
 void adc_finished(struct adc_host *adc, int result)
 {
 	unsigned long flags;
@@ -152,6 +159,7 @@ void adc_finished(struct adc_host *adc, int result)
 
         adc_callback(adc);
 }
+
 void adc_core_irq_handle(struct adc_host *adc)
 {
         int result = 0;
@@ -227,24 +235,38 @@ int adc_sync_read(struct adc_client *client)
 {
         return adc_host_read(client, ADC_SYNC_READ);
 }
+EXPORT_SYMBOL(adc_sync_read);
 
 int adc_async_read(struct adc_client *client)
 {
         return adc_host_read(client, ADC_ASYNC_READ);
 }
 
+EXPORT_SYMBOL(adc_async_read);
 
-static int __init adc_core_init(void)
+int adc_get_def_ref_volt(void)
 {
-        INIT_LIST_HEAD(&adc_host_head);
-        return 0;
+        return g_adc->pdata->ref_volt;
 }
-subsys_initcall(adc_core_init);
+EXPORT_SYMBOL(adc_get_def_ref_volt);
 
-static void __exit adc_core_exit(void)
+int adc_get_curr_ref_volt(void)
 {
-        return;
+        int v = 0, volt = 0;
+
+        if(!g_adc)
+                return -EINVAL;
+        if(!g_adc->base_client)
+                return g_adc->pdata->ref_volt;
+
+        volt = g_adc->pdata->get_base_volt();
+        if(volt < 0)
+                return g_adc->pdata->ref_volt;
+        
+        v = adc_sync_read(g_adc->base_client);
+        if(v < 0)
+                return v;
+
+        return volt * 1024 / v;
 }
-module_exit(adc_core_exit);  
-
-
+EXPORT_SYMBOL(adc_get_curr_ref_volt);

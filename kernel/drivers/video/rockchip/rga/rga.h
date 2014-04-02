@@ -354,10 +354,11 @@ struct rga_reg {
 	struct list_head	status_link;		/* link to register set list */
 	uint32_t  sys_reg[RGA_REG_CTRL_LEN];
     uint32_t  cmd_reg[RGA_REG_CMD_LEN];
+    
     uint32_t *MMU_base;
-    //atomic_t int_enable;
-        
-    //struct rga_req req;
+    //atomic_t int_enable;   
+
+    //struct rga_req      req;
 };
 
 
@@ -372,6 +373,7 @@ typedef struct rga_service_info {
     atomic_t		total_running;
     
     struct rga_reg        *reg;
+    
     uint32_t            cmd_buff[28*8];/* cmd_buff for rga */
     uint32_t            *pre_scale_buf;
     atomic_t            int_disable;     /* 0 int enable 1 int disable  */
@@ -381,12 +383,18 @@ typedef struct rga_service_info {
     atomic_t            rga_working;
     bool                enable;
 
+    //struct rga_req      req[10];
+
     struct mutex	mutex;	// mutex
 } rga_service_info;
 
 
 
+#if defined(CONFIG_ARCH_RK2928) || defined(CONFIG_ARCH_RK3026)
+#define RGA_BASE                 0x1010c000
+#elif defined(CONFIG_ARCH_RK30)
 #define RGA_BASE                 0x10114000
+#endif
 
 //General Registers
 #define RGA_SYS_CTRL             0x000
@@ -461,7 +469,7 @@ typedef struct rga_service_info {
 
 #define RGA_BLIT_COMPLETE_EVENT 1
 
-
+long rga_ioctl_kernel(struct rga_req *req);
 
 
 #endif /*_RK29_IPP_DRIVER_H_*/

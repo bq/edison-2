@@ -1,7 +1,5 @@
 /*
- * arch/arm/mach-rk29/iomux.c
- *
- *Copyright (C) 2010 ROCKCHIP, Inc.
+ * Copyright (C) 2012 ROCKCHIP, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -28,7 +26,7 @@ static struct mux_config rk30_muxs[] = {
 /*
  *	 description				mux  mode   mux	  mux  
  *						reg  offset inter mode
- */ 
+ */
 //GPIO0A
 MUX_CFG(GPIO0A7_I2S8CHSDI_NAME, 			GPIO0A,   14,	 1,   0,	DEFAULT) 
 MUX_CFG(GPIO0A6_HOSTDRVVBUS_NAME,			GPIO0A,   12,	 1,   0,	DEFAULT) 
@@ -257,11 +255,18 @@ int __init rk30_iomux_init(void)
 {
 	int i;
 	printk("%s\n",__func__);
+
+	iomux_init();
+
 	for(i=0;i<ARRAY_SIZE(rk30_muxs);i++)
 	{
 		if(rk30_muxs[i].flags != DEFAULT)
 			rk30_mux_set(&rk30_muxs[i]);	
 	}
+
+#if defined(CONFIG_ARCH_RK3066B)
+	return rk3066b_iomux_init();
+#elif defined(CONFIG_ARCH_RK30)
 
 #if defined(CONFIG_UART0_RK29) || (CONFIG_RK_DEBUG_UART == 0)
 	rk30_mux_api_set(GPIO1A1_UART0SOUT_NAME, GPIO1A_UART0_SOUT);
@@ -345,6 +350,8 @@ int __init rk30_iomux_init(void)
 
 	rk30_mux_api_set(GPIO1D1_CIF1HREF_MIIMDCLK_NAME, GPIO1D_MII_MDCLK);
 	rk30_mux_api_set(GPIO1D0_CIF1VSYNC_MIIMD_NAME, GPIO1D_MII_MD);
+#endif
+
 #endif
 
 	return 0;

@@ -52,7 +52,7 @@ int tps65910_pre_init(struct tps65910 *tps65910){
 		printk(KERN_ERR "Unable to write TPS65910_DEVCTRL2 reg\n");
 		return err;
 	}
-
+	
 	 #if 1
 	/* set PSKIP=0 */
         val = tps65910_reg_read(tps65910, TPS65910_DCDCCTRL);
@@ -191,6 +191,7 @@ int tps65910_pre_init(struct tps65910 *tps65910){
         }
 	
 	val  |= 0xff;
+	val  &= ~(0x07);   //set vdd1 vdd2 vio in pfm mode when in sleep
 	err = tps65910_reg_write(tps65910, TPS65910_SLEEP_KEEP_RES_ON, val);
 	if (err) {
 		printk(KERN_ERR "Unable to read TPS65910 Reg at offset 0x%x= \
@@ -227,6 +228,23 @@ int tps65910_pre_init(struct tps65910 *tps65910){
 	}
 	#endif
 	#endif
+
+	/**********************set arm in pwm ****************/
+	  val = tps65910_reg_read(tps65910, TPS65910_DCDCCTRL);
+        if (val<0) {
+                printk(KERN_ERR "Unable to read TPS65910_DCDCCTRL reg\n");
+                return val;
+        }
+	
+	val &= ~(1<<4);
+	err = tps65910_reg_write(tps65910, TPS65910_DCDCCTRL, val);
+	if (err) {
+		printk(KERN_ERR "Unable to read TPS65910 Reg at offset 0x%x= \
+				\n", TPS65910_VDIG1);
+		return err;
+	}	
+	/************************************************/
+	
 	printk("%s,line=%d\n", __func__,__LINE__);
 	return 0;
 
@@ -239,6 +257,10 @@ int tps65910_post_init(struct tps65910 *tps65910)
 
 	g_pmic_type = PMIC_TYPE_TPS65910;
 	printk("%s:g_pmic_type=%d\n",__func__,g_pmic_type);
+
+	#ifdef CONFIG_RK30_PWM_REGULATOR
+	platform_device_register(&pwm_regulator_device[0]);
+	#endif
 	
 	dcdc = regulator_get(NULL, "vio");	//vcc_io
 	regulator_set_voltage(dcdc, 3000000, 3000000);
@@ -318,16 +340,6 @@ int tps65910_post_init(struct tps65910 *tps65910)
 	printk("%s set vmmc vcc28_cif=%dmV end\n", __func__, regulator_get_voltage(ldo));
 	regulator_put(ldo);
 	udelay(100);
-	#if 0
-	#ifdef CONFIG_RK30_PWM_REGULATOR
-	dcdc = regulator_get(NULL, "vdd_core"); // vdd_log
-	regulator_set_voltage(dcdc, 1100000, 1100000);
-	regulator_enable(dcdc);
-	printk("%s set vdd_core=%dmV end\n", __func__, regulator_get_voltage(dcdc));
-	regulator_put(dcdc);
-	udelay(100);
-	#endif
-	#endif
 	
 	printk("%s,line=%d END\n", __func__,__LINE__);
 	
@@ -609,7 +621,7 @@ void __sramfunc board_pmu_tps65910_resume(void)
 
 static struct tps65910_board tps65910_data = {
 	.irq 	= (unsigned)TPS65910_HOST_IRQ,		
-	.irq_base = NR_GIC_IRQS + NR_GPIO_IRQS,
+	.irq_base = IRQ_BOARD_BASE,
 	.gpio_base = TPS65910_GPIO_EXPANDER_BASE,
 	
 	.pre_init = tps65910_pre_init,

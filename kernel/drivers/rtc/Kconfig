@@ -163,7 +163,7 @@ config RTC_DRV_88PM860X
 
 config RTC_HYM8563
         tristate "RK2818 or RK29 extern HYM8563 RTC"
-	depends on I2C_RK2818 || I2C_RK29
+	depends on I2C_RK2818 || I2C_RK29 || I2C_RK30
         help
           If you say yes here you will get support for the
           HYM8563 I2C RTC chip.
@@ -1115,5 +1115,21 @@ config  TPS65910_RTC
 	depends on MFD_TPS65910
 	help
 		enable tps65910 rtc for system
+
+config  RK808_RTC
+	tristate "rk808 rtc for rk"
+	depends on MFD_RK808
+	help
+		enable rk808 rtc for system
+		
+config RTC_DRV_RC5T619
+	tristate "RICOH RC5T619 PMU RTC driver"
+	depends on MFD_RICOH619
+	default n
+	help
+	  If you say yes here you get support for the RICOH RC5T619 RTC module.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called rtc-rc5t619.
 
 endif # RTC_CLASS

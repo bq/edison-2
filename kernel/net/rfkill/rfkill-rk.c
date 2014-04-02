@@ -42,7 +42,8 @@
 #include <linux/interrupt.h>
 #include <asm/irq.h>
 #include <linux/suspend.h>
-#include <mach/board.h>
+#include <linux/proc_fs.h>
+#include <linux/uaccess.h>
 
 #if 0
 #define DBG(x...)   printk(KERN_INFO "[BT_RFKILL]: "x)
@@ -52,7 +53,7 @@
 
 #define LOG(x...)   printk(KERN_INFO "[BT_RFKILL]: "x)
 
-#define BT_WAKEUP_TIMEOUT           3000
+#define BT_WAKEUP_TIMEOUT           10000
 #define BT_IRQ_WAKELOCK_TIMEOUT     10*1000
 
 #define BT_BLOCKED     true
@@ -71,7 +72,7 @@ enum {
 #elif defined (CONFIG_ARCH_RK30)
     #define rk_mux_api_set(name,mode)      rk30_mux_api_set(name,mode)
 #else
-    #define rk_mux_api_set(name,mode)
+    #define rk_mux_api_set(name,mode)      rk30_mux_api_set(name,mode)
 #endif
 
 // RK29+BCM4329, 其wifi与bt的power控制脚是接在一起的
@@ -120,6 +121,14 @@ static const char bt_name[] =
         "bcm4329"
 #elif defined(CONFIG_MV8787)
         "mv8787"
+#elif defined(CONFIG_AP6210)
+        "ap6210"
+#elif defined(CONFIG_AP6330)
+		"ap6330"
+#elif defined(CONFIG_AP6476)
+		"ap6476"
+#elif defined(CONFIG_AP6493)
+		"ap6493"
 #else
         "bt_default"
 #endif
@@ -135,8 +144,6 @@ static irqreturn_t rfkill_rk_wake_host_irq(int irq, void *dev)
     LOG("BT_WAKE_HOST IRQ fired\n");
     
     DBG("BT IRQ wakeup, request %dms wakelock\n", BT_IRQ_WAKELOCK_TIMEOUT);
-
-//	rk28_send_wakeup_key();
 
     wake_lock_timeout(&rfkill->bt_irq_wl, 
                     msecs_to_jiffies(BT_IRQ_WAKELOCK_TIMEOUT));
@@ -199,7 +206,7 @@ static int rfkill_rk_setup_wake_irq(struct rfkill_rk_data* rfkill)
                     rfkill);
         if (ret) goto fail2;
         LOG("** disable irq\n");
-		disable_irq(irq->irq);
+        disable_irq(irq->irq);
         ret = enable_irq_wake(irq->irq);
         if (ret) goto fail3;
     }
@@ -283,6 +290,7 @@ static int rfkill_rk_set_power(void *data, bool blocked)
 	struct rfkill_rk_data *rfkill = data;
     struct rfkill_rk_gpio *poweron = &rfkill->pdata->poweron_gpio;
     struct rfkill_rk_gpio *reset = &rfkill->pdata->reset_gpio;
+    struct rfkill_rk_gpio* rts = &rfkill->pdata->rts_gpio;
 
     DBG("Enter %s\n", __func__);
 
@@ -290,7 +298,7 @@ static int rfkill_rk_set_power(void *data, bool blocked)
 
 	if (false == blocked) { 
         rfkill_rk_sleep_bt(BT_WAKEUP); // ensure bt is wakeup
-        
+
 		if (gpio_is_valid(poweron->io))
         {
 			gpio_direction_output(poweron->io, poweron->enable);
@@ -303,6 +311,27 @@ static int rfkill_rk_set_power(void *data, bool blocked)
 			gpio_direction_output(reset->io, !reset->enable);
             msleep(20);
         }
+
+#if defined(CONFIG_AP6210)
+        if (gpio_is_valid(rts->io))
+        {
+            if (rts->iomux.name)
+            {
+                rk_mux_api_set(rts->iomux.name, rts->iomux.fgpio);
+            }
+            LOG("ENABLE UART_RTS\n");
+            gpio_direction_output(rts->io, rts->enable);
+
+            msleep(100);
+
+            LOG("DISABLE UART_RTS\n");
+            gpio_direction_output(rts->io, !rts->enable);
+            if (rts->iomux.name)
+            {
+                rk_mux_api_set(rts->iomux.name, rts->iomux.fmux);
+            }
+        }
+#endif
 
     	LOG("bt turn on power\n");
 	} else {
@@ -371,9 +400,8 @@ static int rfkill_rk_pm_prepare(struct device *dev)
     // enable bt wakeup host
     if (gpio_is_valid(wake_host_irq->gpio.io))
     {
-        LOG("enable irq for bt wakeup host\n");
-
-		enable_irq(wake_host_irq->irq);
+        DBG("enable irq for bt wakeup host\n");
+        enable_irq(wake_host_irq->irq);
     }
 
 #ifdef CONFIG_RFKILL_RESET
@@ -424,11 +452,56 @@ static const struct rfkill_ops rfkill_rk_ops = {
     .set_block = rfkill_rk_set_power,
 };
 
+#define PROC_DIR	"bluetooth/sleep"
+
+static struct proc_dir_entry *bluetooth_dir, *sleep_dir;
+
+static int bluesleep_read_proc_lpm(char *page, char **start, off_t offset,
+					int count, int *eof, void *data)
+{
+    *eof = 1;
+    return sprintf(page, "unsupported to read\n");
+}
+
+static int bluesleep_write_proc_lpm(struct file *file, const char *buffer,
+					unsigned long count, void *data)
+{
+    return count;
+}
+
+static int bluesleep_read_proc_btwrite(char *page, char **start, off_t offset,
+					int count, int *eof, void *data)
+{
+    *eof = 1;
+    return sprintf(page, "unsupported to read\n");
+}
+
+static int bluesleep_write_proc_btwrite(struct file *file, const char *buffer,
+					unsigned long count, void *data)
+{
+    char b;
+
+    if (count < 1)
+        return -EINVAL;
+
+    if (copy_from_user(&b, buffer, 1))
+        return -EFAULT;
+
+    DBG("btwrite %c\n", b);
+    /* HCI_DEV_WRITE */
+    if (b != '0') {
+        rfkill_rk_sleep_bt(BT_WAKEUP);
+    }
+
+    return count;
+}
+
 static int rfkill_rk_probe(struct platform_device *pdev)
 {
 	struct rfkill_rk_data *rfkill;
 	struct rfkill_rk_platform_data *pdata = pdev->dev.platform_data;
 	int ret = 0;
+    struct proc_dir_entry *ent;
 
     DBG("Enter %s\n", __func__);
 
@@ -445,6 +518,38 @@ static int rfkill_rk_probe(struct platform_device *pdev)
 
 	rfkill->pdata = pdata;
     g_rfkill = rfkill;
+
+    bluetooth_dir = proc_mkdir("bluetooth", NULL);
+    if (bluetooth_dir == NULL) {
+        LOG("Unable to create /proc/bluetooth directory");
+        return -ENOMEM;
+    }
+
+    sleep_dir = proc_mkdir("sleep", bluetooth_dir);
+    if (sleep_dir == NULL) {
+        LOG("Unable to create /proc/%s directory", PROC_DIR);
+        return -ENOMEM;
+    }
+
+	/* read/write proc entries */
+    ent = create_proc_entry("lpm", 0, sleep_dir);
+    if (ent == NULL) {
+        LOG("Unable to create /proc/%s/lpm entry", PROC_DIR);
+        ret = -ENOMEM;
+        goto fail_alloc;
+    }
+    ent->read_proc = bluesleep_read_proc_lpm;
+    ent->write_proc = bluesleep_write_proc_lpm;
+
+    /* read/write proc entries */
+    ent = create_proc_entry("btwrite", 0, sleep_dir);
+    if (ent == NULL) {
+        LOG("Unable to create /proc/%s/btwrite entry", PROC_DIR);
+        ret = -ENOMEM;
+        goto fail_alloc;
+    }
+    ent->read_proc = bluesleep_read_proc_btwrite;
+    ent->write_proc = bluesleep_write_proc_btwrite;
 
     // 申请GPIO以及IRQ
     DBG("init gpio\n");
@@ -464,7 +569,7 @@ static int rfkill_rk_probe(struct platform_device *pdev)
     ret = rfkill_rk_setup_wake_irq(rfkill);
     if (ret) goto fail_wake;
 
-    ret = rfkill_rk_setup_gpio(&(pdata->rts_gpio), IOMUX_FNORMAL, rfkill->pdata->name, "rts");
+    ret = rfkill_rk_setup_gpio(&pdata->rts_gpio, IOMUX_FMUX, rfkill->pdata->name, "rts"); 
     if (ret) goto fail_wake_host_irq;
 
     // 创建并注册RFKILL设备
@@ -516,6 +621,9 @@ fail_poweron:
 fail_alloc:
 	kfree(rfkill);
     g_rfkill = NULL;
+
+	remove_proc_entry("btwrite", sleep_dir);
+	remove_proc_entry("lpm", sleep_dir);
 
 	return ret;
 }

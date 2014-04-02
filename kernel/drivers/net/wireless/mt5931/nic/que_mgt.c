@@ -3131,6 +3131,7 @@ qmPopOutDueToFallWithin(
         else{
            if (TRUE == fgMissing &&
                CHECK_FOR_TIMEOUT(rCurrentTime, (*prMissTimeout), 
+                                  //MSEC_TO_SEC(QM_RX_BA_ENTRY_MISS_TIMEOUT_MS))) {
                                   MSEC_TO_SYSTIME(QM_RX_BA_ENTRY_MISS_TIMEOUT_MS))) {
                 DBGLOG(QM, TRACE, ("RX BA timeout, next tid %d, SSN %d\n", 
                         prReorderQueParm->ucTid, prReorderedSwRfb->u2SSN));

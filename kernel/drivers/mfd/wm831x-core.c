@@ -29,6 +29,11 @@
 #include <linux/mfd/wm831x/pmu.h>
 
 #include <mach/board.h>
+#include <linux/earlysuspend.h>
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static struct early_suspend wm831x_early_suspend;
+#endif
 
 /* Current settings - values are 2*2^(reg_val/4) microamps.  These are
  * exported since they are used by multiple drivers.
@@ -1465,6 +1470,10 @@ static struct mfd_cell backlight_devs[] = {
 /*
  * Instantiate the generic non-control parts of the device.
  */
+
+__weak void  wm831x_pmu_early_suspend(struct early_suspend *h) {}
+__weak void  wm831x_pmu_early_resume(struct early_suspend *h) {}
+
 int wm831x_device_init(struct wm831x *wm831x, unsigned long id, int irq)
 {
 	struct wm831x_pdata *pdata = wm831x->dev->platform_data;
@@ -1729,7 +1738,13 @@ int wm831x_device_init(struct wm831x *wm831x, unsigned long id, int irq)
 			goto err_irq;
 		}
 	}
-	
+	#ifdef CONFIG_HAS_EARLYSUSPEND
+	wm831x_early_suspend.level = 0xffff;
+    wm831x_early_suspend.suspend = wm831x_pmu_early_suspend;
+    wm831x_early_suspend.resume = wm831x_pmu_early_resume;
+    register_early_suspend(&wm831x_early_suspend);
+	#endif
+
 	return 0;
 
 err_irq:
@@ -1845,13 +1860,14 @@ int wm831x_device_shutdown(struct wm831x *wm831x)
 
 	if(wm831x_set_bits(wm831x, WM831X_RTC_CONTROL, WM831X_RTC_ALAM_ENA_MASK, 0) < 0)
 			printk("%s wm831x_set_bits err\n", __FUNCTION__);   //disable rtc alam
-
+#if 0
 	if (pdata && pdata->last_deinit) {
 		ret = pdata->last_deinit(wm831x);
 		if (ret != 0) {
 			dev_info(wm831x->dev, "last_deinit() failed: %d\n", ret);
 		}
 	}
+#endif
 	//if(0 == reboot_cmd_get())
 	
 		if(wm831x_set_bits(wm831x, WM831X_POWER_STATE, WM831X_CHIP_ON_MASK, 0) < 0)

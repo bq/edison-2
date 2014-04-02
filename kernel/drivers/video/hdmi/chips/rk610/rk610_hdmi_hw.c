@@ -880,8 +880,7 @@ byte DoEdidRead (struct i2c_client *client)
 	        RK610_DBG(&client->dev,"\n/************block %d*******/\n",i);
 	        memset(edid_buf,0,EDID_BLOCK_SIZE);
             RK610_read_edid_block(client,i, edid_buf); 
-            //Parse861ShortDescriptors(client,edid_buf);
-            Result = Parse861ShortDescriptors(client,edid_buf);
+            Parse861ShortDescriptors(client,edid_buf);
         #ifdef  RK610_DEBUG
             for (j=0; j<EDID_BLOCK_SIZE; j++){
 	            if(j%16==0)
@@ -891,13 +890,7 @@ byte DoEdidRead (struct i2c_client *client)
 	    #endif
 	        }
 
-            //g_edid.HDMI_Sink = TRUE;
-                if (Result != EDID_SHORT_DESCRIPTORS_OK) {
-                        RK610_DBG(&client->dev,"EDID -> Extension Parse FAILED\n");
-                        g_edid.HDMI_Sink = FALSE;
-                } else {
-                        RK610_DBG(&client->dev,"EDID -> Extension Parse OK\n");
-                }
+            g_edid.HDMI_Sink = TRUE;
 	    }
 
 #if 0
@@ -962,16 +955,10 @@ static int Rk610_hdmi_Display_switch(struct i2c_client *client)
     int mode;
     mode = (g_edid.HDMI_Sink == TRUE)? DISPLAY_HDMI:DISPLAY_DVI;
     ret = Rk610_hdmi_i2c_read_p0_reg(client, 0x52, &c);
-#if defined(CONFIG_HDMI_DEFAULT_OUT_HDMI)
-	c |= DISPLAY_MODE; 
-#elif defined(CONFIG_HDMI_DEFAULT_OUT_DVI)
-	c &= ~DISPLAY_MODE;
-#else 
 	if(mode == DISPLAY_HDMI)
 		c |= DISPLAY_MODE; 
 	else 
 		c &= ~DISPLAY_MODE;
-#endif
     ret = Rk610_hdmi_i2c_write_p0_reg(client, 0x52, &c);
     RK610_DBG(&client->dev,">>>%s mode=%d,c=%x",__func__,mode,c);
     return ret;
@@ -994,15 +981,15 @@ static int Rk610_hdmi_Config_audio_informat(struct i2c_client *client)
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0xa2, &c);
 	//c=0x00;   //PB0
 	//ret = Rk610_hdmi_i2c_write_p0_reg(client, 0xa3, &c);
-	c=0x00;     //PB1
+	c=0x11;     //PB1
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0xa4, &c);
-	c=0x00;     //PB2
+	c=0x09;     //PB2
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0xa5, &c);
 	c=0x00;     //PB3
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0xa6, &c);
 	c=0x00;     //PB4
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0xa7, &c);
-	c=0x00;     //PB5
+	c=0x01;     //PB5
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0xa8, &c);
     return ret;
 }
@@ -1077,7 +1064,7 @@ static int Rk610_hdmi_Config_Audio(struct i2c_client *client ,u8 audio_fs)
     RK610_DBG(&client->dev,"%s \n",__FUNCTION__);
     c=0x01;
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0x35, &c);
-	c=0x04;
+	c=0x3c;
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0x38, &c);
 	c=0x00;
 	ret = Rk610_hdmi_i2c_write_p0_reg(client, 0x39, &c);

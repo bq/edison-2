@@ -24,6 +24,7 @@
 #define RT3261_MONO_OUT			0x04
 /* Dummy */
 #define RT3261_DUMMY_PR3F				0x05
+#define RT3261_DUMMY_SPKMIXER			0x06
 /* I/O - Input */
 #define RT3261_IN1_IN2				0x0d
 #define RT3261_IN3_IN4				0x0e
@@ -149,6 +150,7 @@
 #define RT3261_BIAS_CUR1			0x12
 #define RT3261_BIAS_CUR3			0x14
 #define RT3261_CLSD_INT_REG1			0x1c
+#define RT3261_CHPUMP_INT_REG1      0x24 //bard 11-6
 #define RT3261_MAMP_INT_REG2			0x37
 #define RT3261_CHOP_DAC_ADC			0x3d
 #define RT3261_MIXER_INT_REG			0x3f
@@ -2039,6 +2041,8 @@ enum {
 #define RT3261_EQ_PST_VOL_SFT			0
 
 /* General Control1 (0xfa) */
+#define RT3261_LOUT_DF_MASK			(0x1 << 14)
+#define RT3261_LOUT_DF				14
 #define RT3261_M_MAMIX_L			(0x1 << 13)
 #define RT3261_M_MAMIX_R			(0x1 << 12)
 
@@ -2061,6 +2065,7 @@ enum {
 /* Volume Rescale */
 #define RT3261_VOL_RSCL_MAX 0x27
 #define RT3261_VOL_RSCL_RANGE 0x1F
+#define RT3261_HP_VOL_RSCL_RANGE 0x19
 /* Debug String Length */
 #define RT3261_REG_DISP_LEN 10
 
@@ -2068,7 +2073,9 @@ enum {
 #define RT3261_HEADSET_DET	BIT(1)
 #define RT3261_HEADPHO_DET	BIT(2)
 
-int rt3261_headset_detect(struct snd_soc_codec *codec, int jack_insert);
+void codec_set_spk(bool on);
+
+int rt3261_headset_mic_detect(int jack_insert);
 
 /* System Clock Source */
 enum {
@@ -2114,6 +2121,11 @@ enum {
 	RT3261_DMIC2,
 };
 
+enum {
+	RT3261_ASRC_DIS,
+	RT3261_ASRC_EN,
+};
+
 struct rt3261_pll_code {
 	bool m_bp; /* Indicates bypass m code or not. */
 	int m_code;
@@ -2137,12 +2149,21 @@ struct rt3261_priv {
 	int pll_out;
 
 	int dmic_en;
+	int asrc_en;
 	int dsp_sw; /* expected parameter setting */
 	bool dsp_play_pass;
 	bool dsp_rec_pass;
 
 	unsigned int codec_en_gpio;
 	int (*io_init)(int gpio, char *iomux_name, int iomux_mode);
+
+	unsigned int modem_is_open;
+	unsigned int spk_num;
+	unsigned int modem_input_mode;
+	unsigned int lout_to_modem_mode;
+	unsigned int spk_amplify;
+	unsigned int playback_if1_data_control;
+	unsigned int playback_if2_data_control;
 };
 
 int rt3261_conn_mux_path(struct snd_soc_codec *codec,

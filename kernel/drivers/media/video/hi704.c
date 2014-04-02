@@ -59,7 +59,7 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_Brightness	0
 #define CONFIG_SENSOR_Contrast      0
 #define CONFIG_SENSOR_Saturation    0
-#define CONFIG_SENSOR_Effect        1
+#define CONFIG_SENSOR_Effect        0
 #define CONFIG_SENSOR_Scene         1
 #define CONFIG_SENSOR_DigitalZoom   0
 #define CONFIG_SENSOR_Focus         0
@@ -106,8 +106,9 @@ struct  flash_timer{
     struct soc_camera_device *icd;
 	struct hrtimer timer;
 };
+#if CONFIG_SENSOR_Flash
 static enum hrtimer_restart flash_off_func(struct hrtimer *timer);
-
+#endif
 static struct  flash_timer flash_off_timer;
 //for user defined if user want to customize the series , zyc
 #ifdef CONFIG_HI704_USER_DEFINED_SERIES
@@ -708,16 +709,15 @@ static  struct reginfo sensor_WhiteB_Auto[]=
 /* Cloudy Colour Temperature : 6500K - 8000K  */
 static  struct reginfo sensor_WhiteB_Cloudy[]=
 {
-	    //Sunny
 	{0x03, 0x22},
 	{0x10, 0x6a},
-	{0x80, 0x5e},
-	{0x81, 0x25},
-	{0x82, 0x2d},
-	{0x83, 0x52},
-	{0x84, 0x40},
+	{0x80, 0x62},
+	{0x81, 0x20},
+	{0x82, 0x2e},
+	{0x83, 0x6d},
+	{0x84, 0x65},
 	{0x85, 0x30},	
-	{0x86, 0x1c},	
+	{0x86, 0x25},	
 	{END_REG, END_REG},
 };
 /* ClearDay Colour Temperature : 5000K - 6500K  */
@@ -727,7 +727,7 @@ static  struct reginfo sensor_WhiteB_ClearDay[]=
 	{0x03, 0x22},
 	{0x10, 0x6a},
 	{0x80, 0x50},
-	{0x81, 0x25},
+	{0x81, 0x20},
 	{0x82, 0x2d},
 	{0x83, 0x52},
 	{0x84, 0x40},
@@ -735,13 +735,13 @@ static  struct reginfo sensor_WhiteB_ClearDay[]=
 	{0x86, 0x1c},	
 	{END_REG, END_REG},
 };
-/* Office Colour Temperature : 3500K - 5000K  */   // diandeng
+/* Office Colour Temperature : 3500K - 5000K  */
 static  struct reginfo sensor_WhiteB_TungstenLamp1[]=
 {
     //Office£¬Ó«¹âµÆ
  	{0x03, 0x22},
 	{0x10, 0x6a},
-	{0x80, 0x20},
+	{0x80, 0x40},
 	{0x81, 0x20},
 	{0x82, 0x4f},
 	{0x83, 0x44},
@@ -751,15 +751,15 @@ static  struct reginfo sensor_WhiteB_TungstenLamp1[]=
 	{END_REG, END_REG},
 
 };
-/* Home Colour Temperature : 2500K - 3500K  */           // yingguangdeng
+/* Home Colour Temperature : 2500K - 3500K  */
 static  struct reginfo sensor_WhiteB_TungstenLamp2[]=
 {
     //Home,°×³ãµÆ
 	{0x03, 0x22},
 	{0x10, 0x6a},
-	{0x80, 0x2B},
+	{0x80, 0x26},
 	{0x81, 0x20},
-	{0x82, 0x40},
+	{0x82, 0x55},
 	{0x83, 0x24},
 	{0x84, 0x1e},
 	{0x85, 0x58},	
@@ -1128,7 +1128,7 @@ static struct reginfo sensor_Zoom3[] =
 };
 static struct reginfo *sensor_ZoomSeqe[] = {sensor_Zoom0, sensor_Zoom1, sensor_Zoom2, sensor_Zoom3, NULL,};
 #endif
-static const struct v4l2_querymenu sensor_menus[] =
+static  struct v4l2_querymenu sensor_menus[] =
 {
 	#if CONFIG_SENSOR_WhiteBalance
     { .id = V4L2_CID_DO_WHITE_BALANCE,  .index = 0,  .name = "auto",  .reserved = 0, }, {  .id = V4L2_CID_DO_WHITE_BALANCE,  .index = 1, .name = "incandescent",  .reserved = 0,},
@@ -1198,7 +1198,7 @@ static  struct v4l2_queryctrl sensor_controls[] =
         .minimum	= 0,
         .maximum	= 6,
         .step		= 1,
-        .default_value = 3,
+        .default_value = 0,
     },
 	#endif
 
@@ -1651,7 +1651,7 @@ static int sensor_ioctrl(struct soc_camera_device *icd,enum rk29sensor_power_cmd
 sensor_power_end:
 	return ret;
 }
-
+#if CONFIG_SENSOR_Flash
 static enum hrtimer_restart flash_off_func(struct hrtimer *timer){
 	struct flash_timer *fps_timer = container_of(timer, struct flash_timer, timer);
     sensor_ioctrl(fps_timer->icd,Sensor_Flash,0);
@@ -1659,6 +1659,7 @@ static enum hrtimer_restart flash_off_func(struct hrtimer *timer){
     return 0;
     
 }
+#endif
 static int sensor_init(struct v4l2_subdev *sd, u32 val)
 {
     struct i2c_client *client = v4l2_get_subdevdata(sd);

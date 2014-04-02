@@ -142,6 +142,4 @@ source "drivers/cir/Kconfig"
 
 source "drivers/mtk_wcn_combo/Kconfig"
 
-source "drivers/hsadc/Kconfig"
-
 endmenu

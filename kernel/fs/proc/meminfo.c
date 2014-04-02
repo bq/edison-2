@@ -14,6 +14,9 @@
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include "internal.h"
+#ifdef CONFIG_PLAT_RK
+#include <mach/ddr.h>
+#endif
 
 void __attribute__((weak)) arch_report_meminfo(struct seq_file *m)
 {
@@ -105,7 +108,15 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 		"AnonHugePages:  %8lu kB\n"
 #endif
 		,
+#ifdef CONFIG_PLAT_RK
+#ifdef CONFIG_RK29_MEM_SIZE_M
+		(unsigned long)CONFIG_RK29_MEM_SIZE_M * 1024,
+#else
+		(unsigned long)ddr_get_cap() >> 10,
+#endif
+#else
 		K(i.totalram),
+#endif
 		K(i.freeram),
 		K(i.bufferram),
 		K(cached),
@@ -131,12 +142,13 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 		K(i.freeswap),
 		K(global_page_state(NR_FILE_DIRTY)),
 		K(global_page_state(NR_WRITEBACK)),
-		K(global_page_state(NR_ANON_PAGES)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
+		K(global_page_state(NR_ANON_PAGES)
 		  + global_page_state(NR_ANON_TRANSPARENT_HUGEPAGES) *
-		  HPAGE_PMD_NR
+		  HPAGE_PMD_NR),
+#else
+		K(global_page_state(NR_ANON_PAGES)),
 #endif
-		  ),
 		K(global_page_state(NR_FILE_MAPPED)),
 		K(global_page_state(NR_SHMEM)),
 		K(global_page_state(NR_SLAB_RECLAIMABLE) +

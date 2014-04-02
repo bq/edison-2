@@ -259,7 +259,8 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 	}
 
 	card->ext_csd.rev = ext_csd[EXT_CSD_REV];
-	if (card->ext_csd.rev > 5) {
+	if ((HOST_IS_EMMC(card->host) && card->ext_csd.rev > 6) ||
+	    (!HOST_IS_EMMC(card->host) && card->ext_csd.rev > 5))	{
 		printk(KERN_ERR "%s: unrecognised EXT_CSD revision %d\n",
 			mmc_hostname(card->host), card->ext_csd.rev);
 		err = -EINVAL;
@@ -340,7 +341,10 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		 * There are two boot regions of equal size, defined in
 		 * multiples of 128K.
 		 */
-		card->ext_csd.boot_size = ext_csd[EXT_CSD_BOOT_MULT] << 17;
+		if(HOST_IS_EMMC(card->host)) //emmc: We do NOT alloc boot partition now (kfx)
+			card->ext_csd.boot_size = 0;
+		else
+			card->ext_csd.boot_size = ext_csd[EXT_CSD_BOOT_MULT] << 17;
 	}
 
 	card->ext_csd.raw_hc_erase_gap_size =
@@ -359,6 +363,7 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		 * card has the Enhanced area enabled.  If so, export enhanced
 		 * area offset and size to user by adding sysfs interface.
 		 */
+		card->ext_csd.raw_partition_support = ext_csd[EXT_CSD_PARTITION_SUPPORT];
 		if ((ext_csd[EXT_CSD_PARTITION_SUPPORT] & 0x2) &&
 		    (ext_csd[EXT_CSD_PARTITION_ATTRIBUTE] & 0x1)) {
 			u8 hc_erase_grp_sz =
@@ -405,6 +410,7 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 	if (card->ext_csd.rev >= 5)
 		card->ext_csd.rel_param = ext_csd[EXT_CSD_WR_REL_PARAM];
 
+	card->ext_csd.raw_erased_mem_count = ext_csd[EXT_CSD_ERASED_MEM_CONT];
 	if (ext_csd[EXT_CSD_ERASED_MEM_CONT])
 		card->erased_byte = 0xFF;
 	else
@@ -570,10 +576,9 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	err = mmc_send_op_cond(host, ocr | (1 << 30), &rocr);
 	if (err)
 	{
-#if defined(CONFIG_SDMMC_RK29) && !defined(CONFIG_SDMMC_RK29_OLD)
-	    printk(KERN_INFO "%s..%d..  ====*Identify the card as MMC , but OCR error, so fail to initialize.[%s]\n",\
-	        __FUNCTION__, __LINE__, mmc_hostname(host));
-#endif
+		if(!HOST_IS_EMMC(host))
+	    		printk(KERN_INFO "%s..%d..  ====*Identify the card as MMC , but OCR error, so fail to initialize.[%s]\n",\
+	        		__FUNCTION__, __LINE__, mmc_hostname(host));
 		goto err;
 	}
 
@@ -750,10 +755,10 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		if (max_dtr > card->ext_csd.hs_max_dtr)
 			max_dtr = card->ext_csd.hs_max_dtr;
 	} else if (max_dtr > card->csd.max_dtr) {
-#if defined(CONFIG_SDMMC_RK29) && !defined(CONFIG_SDMMC_RK29_OLD)
-        //in order to expand the compatibility of card. Added by xbw@2011-03-21
-		card->csd.max_dtr = (card->csd.max_dtr > MMC_FPP_FREQ) ? MMC_FPP_FREQ : (card->csd.max_dtr); 
-#endif
+		if(!HOST_IS_EMMC(host)){
+        		//in order to expand the compatibility of card. Added by xbw@2011-03-21
+			card->csd.max_dtr = (card->csd.max_dtr > MMC_FPP_FREQ) ? MMC_FPP_FREQ : (card->csd.max_dtr); 
+		}
 		max_dtr = card->csd.max_dtr;
 	}
 
@@ -848,7 +853,7 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			 *
 			 * WARNING: eMMC rules are NOT the same as SD DDR
 			 */
-			if (ddr == EXT_CSD_CARD_TYPE_DDR_1_2V) {
+			if (ddr == MMC_1_2V_DDR_MODE) {
 				err = mmc_set_signal_voltage(host,
 					MMC_SIGNAL_VOLTAGE_120, 0);
 				if (err)
@@ -911,6 +916,7 @@ static void mmc_detect(struct mmc_host *host)
 
 		mmc_claim_host(host);
 		mmc_detach_bus(host);
+		mmc_power_off(host);
 		mmc_release_host(host);
 	}
 }
@@ -1028,7 +1034,7 @@ static void mmc_attach_bus_ops(struct mmc_host *host)
 /*
  * Starting point for MMC card init.
  */
-int mmc_attach_mmc(struct mmc_host *host)
+static int sdmmc_attach_mmc(struct mmc_host *host)
 {
 	int err;
 	u32 ocr;
@@ -1137,3 +1143,92 @@ err:
 
 	return err;
 }
+static int emmc_attach_mmc(struct mmc_host *host)
+{
+	int err;
+	u32 ocr;
+
+	BUG_ON(!host);
+	WARN_ON(!host->claimed);
+
+	err = mmc_send_op_cond(host, 0, &ocr);
+	if (err)
+		return err;
+
+	mmc_attach_bus_ops(host);
+	if (host->ocr_avail_mmc)
+		host->ocr_avail = host->ocr_avail_mmc;
+
+	/*
+	 * We need to get OCR a different way for SPI.
+	 */
+	if (mmc_host_is_spi(host)) {
+		err = mmc_spi_read_ocr(host, 1, &ocr);
+		if (err)
+			goto err;
+	}
+
+	/*
+	 * Sanity check the voltages that the card claims to
+	 * support.
+	 */
+	if (ocr & 0x7F) {
+		printk(KERN_WARNING "%s: card claims to support voltages "
+		       "below the defined range. These will be ignored.\n",
+		       mmc_hostname(host));
+		ocr &= ~0x7F;
+	}
+
+	host->ocr = mmc_select_voltage(host, ocr);
+
+	/*
+	 * Can we support the voltage of the card?
+	 */
+	if (!host->ocr) {
+		err = -EINVAL;
+		goto err;
+	}
+
+	/*
+	 * Detect and init the card.
+	 */
+	err = mmc_init_card(host, host->ocr, NULL);
+	if (err)
+		goto err;
+
+	mmc_release_host(host);
+	err = mmc_add_card(host->card);
+	mmc_claim_host(host);
+	if (err)
+		goto remove_card;
+
+	return 0;
+
+remove_card:
+	mmc_release_host(host);
+	mmc_remove_card(host->card);
+	mmc_claim_host(host);
+	host->card = NULL;
+err:
+	mmc_detach_bus(host);
+
+	printk(KERN_ERR "%s: error %d whilst initialising MMC card\n",
+		mmc_hostname(host), err);
+
+	return err;
+}
+
+int mmc_attach_mmc(struct mmc_host *host)
+{
+	if(HOST_IS_EMMC(host))
+		return emmc_attach_mmc(host);
+	else
+		return sdmmc_attach_mmc(host);
+}
+
+
+
+
+
+
+

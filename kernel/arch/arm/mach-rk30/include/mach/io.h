@@ -26,11 +26,16 @@
 #define RK30_IMEM_PHYS          0x10080000
 #define RK30_IMEM_BASE          IOMEM(0xFEF00000)
 #define RK30_IMEM_NONCACHED     RK30_IO_TO_VIRT0(RK30_IMEM_PHYS)
+#if defined(CONFIG_ARCH_RK3066B)
+#define RK30_IMEM_SIZE          SZ_16K
+#else
 #define RK30_IMEM_SIZE          SZ_64K
+#endif
 #define RK30_GPU_PHYS           0x10090000
 #define RK30_GPU_SIZE           SZ_64K
 
 #define RK30_ROM_PHYS           0x10100000
+#define RK30_ROM_BASE           RK30_IO_TO_VIRT0(RK30_ROM_PHYS)
 #define RK30_ROM_SIZE           SZ_16K
 #define RK30_VCODEC_PHYS        0x10104000
 #define RK30_VCODEC_SIZE        SZ_16K
@@ -141,6 +146,7 @@
 #define RK30_TIMER2_BASE        RK30_IO_TO_VIRT1(RK30_TIMER2_PHYS)
 #define RK30_TIMER2_SIZE        SZ_8K
 #define RK30_EFUSE_PHYS         0x20010000
+#define RK30_EFUSE_BASE		RK30_IO_TO_VIRT1(RK30_EFUSE_PHYS)
 #define RK30_EFUSE_SIZE         SZ_16K
 #define RK30_TZPC_PHYS          0x20014000
 #define RK30_TZPC_SIZE          SZ_16K
@@ -160,7 +166,11 @@
 #define RK30_PWM01_PHYS         0x20030000
 #define RK30_PWM01_BASE         RK30_IO_TO_VIRT1(RK30_PWM01_PHYS)
 #define RK30_PWM01_SIZE         SZ_16K
+#if defined(CONFIG_ARCH_RK3066B)
+#define RK30_GPIO0_PHYS         0x2000a000
+#else
 #define RK30_GPIO0_PHYS         0x20034000
+#endif
 #define RK30_GPIO0_BASE         RK30_IO_TO_VIRT1(RK30_GPIO0_PHYS)
 #define RK30_GPIO0_SIZE         SZ_16K
 #define RK30_TIMER0_PHYS        0x20038000
@@ -215,19 +225,10 @@
 #define RK30_GPIO4_BASE         RK30_IO_TO_VIRT1(RK30_GPIO4_PHYS)
 #define RK30_GPIO4_SIZE         SZ_16K
 
-#if CONFIG_RK_DEBUG_UART == 0
-#define DEBUG_UART_PHYS         RK30_UART0_PHYS
-#define DEBUG_UART_BASE         RK30_UART0_BASE
-#elif CONFIG_RK_DEBUG_UART == 1
-#define DEBUG_UART_PHYS         RK30_UART1_PHYS
-#define DEBUG_UART_BASE         RK30_UART1_BASE
-#elif CONFIG_RK_DEBUG_UART == 2
-#define DEBUG_UART_PHYS         RK30_UART2_PHYS
-#define DEBUG_UART_BASE         RK30_UART2_BASE
-#elif CONFIG_RK_DEBUG_UART == 3
-#define DEBUG_UART_PHYS         RK30_UART3_PHYS
-#define DEBUG_UART_BASE         RK30_UART3_BASE
-#endif
+#define RK30_GPS_PHYS           0x10230000
+#define RK30_GPS_SIZE           SZ_64K
+#define RK30_HSIC_PHYS          0x10240000
+#define RK30_HSIC_SIZE          SZ_256K
 
 #define GIC_DIST_BASE           RK30_GICD_BASE
 #define GIC_CPU_BASE            RK30_GICC_BASE

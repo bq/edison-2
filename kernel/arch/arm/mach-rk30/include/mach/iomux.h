@@ -1,23 +1,16 @@
-/*
- * arch/arm/mach-rk29/include/mach/iomux.h
- *
- *Copyright (C) 2010 ROCKCHIP, Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
-
-#ifndef __RK29_IOMUX_H__
-#define __RK29_IOMUX_H__
+#ifndef __MACH_IOMUX_H__
+#define __MACH_IOMUX_H__
 
 #include <linux/init.h>
+#include <mach/iomux-rk30.h>
+#if defined(CONFIG_ARCH_RK3066B)
 
+#include <mach/grf-rk3066b.h>
+#define rk29_mux_api_set(name, mode) iomux_set(mode)
+#define rk30_mux_api_set(name, mode) iomux_set(mode)
+#define rk30_iomux_init() iomux_init()
+
+#elif defined(CONFIG_ARCH_RK30)
 //GPIO0A
 #define GPIO0A_GPIO0A7				0 
 #define GPIO0A_I2S_8CH_SDI			1 
@@ -482,11 +475,6 @@
 #define GPIO6B_GPIO6B7				0 
 #define GPIO6B_TEST_CLOCK_OUT			1 
 
-
-#define DEFAULT					0
-#define INITIAL					1
-
-
 #define      GRF_GPIO0L_DIR                       0x0000
 #define      GRF_GPIO0H_DIR                       0x0004
 #define      GRF_GPIO1L_DIR                       0x0008
@@ -805,6 +793,9 @@
 //GPIO6B
 #define GPIO6B7_TESTCLOCKOUT_NAME			"gpio6b7_testclockout_name" 
 
+#define DEFAULT					0
+#define INITIAL					1
+
 #define MUX_CFG(desc,reg,off,interl,mux_mode,bflags)	\
 {						  	\
         .name = desc,                                   \
@@ -830,5 +821,7 @@ struct mux_config {
 extern int __init rk30_iomux_init(void);
 extern void rk30_mux_api_set(char *name, unsigned int mode);
 extern int rk30_mux_api_get(char *name);
+
+#endif
 
 #endif

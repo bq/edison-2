@@ -594,7 +594,7 @@ static struct ext_slave_descr lis3dh_descr = {
 	.get_config       = lis3dh_get_config,
 	.name             = "lis3dh",
 	.type             = EXT_SLAVE_TYPE_ACCEL,
-	.id               = ACCEL_ID_LIS3DH,
+	.id               = ACCEL_ID_LIS3DH_l,
 	.read_reg         = 0x28 | 0x80, /* 0x80 for burst reads */
 	.read_len         = 6,
 	.endian           = EXT_SLAVE_BIG_ENDIAN,
@@ -682,7 +682,7 @@ static int lis3dh_mod_remove(struct i2c_client *client)
 }
 
 static const struct i2c_device_id lis3dh_mod_id[] = {
-	{ "lis3dh", ACCEL_ID_LIS3DH },
+	{ "lis3dh", ACCEL_ID_LIS3DH_l },
 	{}
 };
 

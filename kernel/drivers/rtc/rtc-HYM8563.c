@@ -486,8 +486,10 @@ static int __devinit hym8563_probe(struct i2c_client *client, const struct i2c_d
 exit:
 	if (rtc)
 		rtc_device_unregister(rtc);
-	if (hym8563)
+	if (hym8563) {
+		wake_lock_destroy(&hym8563->wake_lock);
 		kfree(hym8563);
+	}
 	return rc;
 }
 
@@ -538,7 +540,11 @@ static struct i2c_driver hym8563_driver = {
 	},
 	.probe		= hym8563_probe,
 	.remove		= __devexit_p(hym8563_remove),
+#if defined(CONFIG_ARCH_RK3066B) || defined(CONFIG_ARCH_RK3188)
+	//.shutdown=hym8563_shutdown,
+#else
 	.shutdown=hym8563_shutdown,
+#endif
 	.id_table	= hym8563_id,
 };
 

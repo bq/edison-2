@@ -1070,11 +1070,24 @@ static int32_t handle_hc_xfercomp_intr(dwc_otg_hcd_t *_hcd,
 {
 	int 			urb_xfer_done;
 	dwc_otg_halt_status_e 	halt_status = DWC_OTG_HC_XFER_COMPLETE;
-	struct urb 		*urb = _qtd->urb;
-	int 			pipe_type = usb_pipetype(urb->pipe);
+	struct urb 		*urb;
+	int 			pipe_type;
 
 	DWC_DEBUGPL(DBG_HCD, "--Host Channel %d Interrupt: "
 		    "Transfer Complete--\n", _hc->hc_num);
+
+	if(((uint32_t) _qtd & 0xf0000000)==0){
+		DWC_PRINT("%s qtd %p\n", __func__, _qtd);
+		release_channel(_hcd, _hc, _qtd, _hc->halt_status);
+		return 1;
+	}
+
+	urb = _qtd->urb;
+	if(((uint32_t)urb & 0xf0000000)==0){
+		DWC_PRINT("%s qtd %p, urb %p\n", __func__, _qtd, urb);
+		release_channel(_hcd, _hc, _qtd, _hc->halt_status);
+		return 1;
+	}
 
      	/* 
 	 * Handle xfer complete on CSPLIT.
@@ -1083,6 +1096,7 @@ static int32_t handle_hc_xfercomp_intr(dwc_otg_hcd_t *_hcd,
 		_qtd->complete_split = 0;
 	}
 
+	pipe_type = usb_pipetype(urb->pipe);
 	/* Update the QTD and URB states. */
 	switch (pipe_type) {
 	case PIPE_CONTROL:
@@ -1134,8 +1148,12 @@ static int32_t handle_hc_xfercomp_intr(dwc_otg_hcd_t *_hcd,
 		break;
 	case PIPE_INTERRUPT:
 		DWC_DEBUGPL(DBG_HCDV, "  Interrupt transfer complete\n");
-		update_urb_state_xfer_comp(_hc, _hc_regs, urb, _qtd);
-
+		urb_xfer_done = update_urb_state_xfer_comp(_hc, _hc_regs, urb, _qtd);
+		if(!urb_xfer_done){
+		    save_data_toggle(_hc, _hc_regs, _qtd);
+    		halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_NAK);
+    		break;
+		}
 		/*
 		 * Interrupt URB is done on the first transfer complete
 		 * interrupt.
@@ -1297,6 +1315,8 @@ static int32_t handle_hc_nak_intr(dwc_otg_hcd_t *_hcd,
 		break;
 	case PIPE_INTERRUPT:
 		_qtd->error_count = 0;
+        update_urb_state_xfer_intr(_hc, _hc_regs, _qtd->urb,_qtd, DWC_OTG_HC_XFER_NAK);
+        save_data_toggle(_hc, _hc_regs, _qtd);
 		halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_NAK);
 		break;
 	case PIPE_ISOCHRONOUS:
@@ -1582,7 +1602,7 @@ static int32_t handle_hc_xacterr_intr(dwc_otg_hcd_t *_hcd,
         DWC_PRINT("%s qtd %p\n", __func__, _qtd);
         goto out;
     }
-    if(((uint32_t) _qtd & 0x80000000)==0){
+    if(((uint32_t) _qtd & 0xf0000000)==0xf0000000){
         DWC_PRINT("%s qtd %p 1\n", __func__, _qtd);
         goto out;
     }
@@ -1831,10 +1851,11 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t *_hcd,
 		 */
 		handle_hc_ack_intr(_hcd, _hc, _hc_regs, _qtd);
 	} else if(hcint.b.datatglerr){
-	     DWC_PRINT("%s, DATA toggle error, Channel %d\n",__func__, _hc->hc_num);
-             save_data_toggle(_hc, _hc_regs, _qtd);
-             halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_NO_HALT_STATUS);
-				clear_hc_int(_hc_regs,chhltd);
+         DWC_PRINT("%s, DATA toggle error, Channel %d\n",__func__, _hc->hc_num);
+         _qtd->error_count++;
+         save_data_toggle(_hc, _hc_regs, _qtd);
+         halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_XACT_ERR);
+         clear_hc_int(_hc_regs,chhltd);
 	} else {
 		if (_hc->ep_type == DWC_OTG_EP_TYPE_INTR ||
 		    _hc->ep_type == DWC_OTG_EP_TYPE_ISOC) {
@@ -1919,6 +1940,9 @@ int32_t dwc_otg_hcd_handle_hc_n_intr (dwc_otg_hcd_t *_dwc_otg_hcd, uint32_t _num
 		}
 	}
 
+	if (hcint.b.chhltd) {
+		retval |= handle_hc_chhltd_intr(_dwc_otg_hcd, hc, hc_regs, qtd);
+	}
 	if (hcint.b.xfercomp) {
 		retval |= handle_hc_xfercomp_intr(_dwc_otg_hcd, hc, hc_regs, qtd);
 		/*
@@ -1927,9 +1951,6 @@ int32_t dwc_otg_hcd_handle_hc_n_intr (dwc_otg_hcd_t *_dwc_otg_hcd, uint32_t _num
 		 * to call the NYET interrupt handler in this case.
 		 */
 		hcint.b.nyet = 0;
-	}
-	if (hcint.b.chhltd) {
-		retval |= handle_hc_chhltd_intr(_dwc_otg_hcd, hc, hc_regs, qtd);
 	}
 	if (hcint.b.ahberr) {
 		retval |= handle_hc_ahberr_intr(_dwc_otg_hcd, hc, hc_regs, qtd);
@@ -1941,7 +1962,8 @@ int32_t dwc_otg_hcd_handle_hc_n_intr (dwc_otg_hcd_t *_dwc_otg_hcd, uint32_t _num
 		retval |= handle_hc_nak_intr(_dwc_otg_hcd, hc, hc_regs, qtd);
 	}
 	if (hcint.b.ack) {
-		retval |= handle_hc_ack_intr(_dwc_otg_hcd, hc, hc_regs, qtd);
+		if(!hcint.b.chhltd)
+			retval |= handle_hc_ack_intr(_dwc_otg_hcd, hc, hc_regs, qtd);
 	}
 	if (hcint.b.nyet) {
 		retval |= handle_hc_nyet_intr(_dwc_otg_hcd, hc, hc_regs, qtd);

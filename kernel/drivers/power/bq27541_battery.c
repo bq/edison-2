@@ -348,7 +348,7 @@ static int bq27541_battery_rsoc(struct bq27541_device_info *di)
 			/ (g_pdata->capacity_max - g_pdata->capacity_min);
 	}
 	bq27541_cap = rsoc;
-
+#if 0
 	/*check full flags,if not full, show 99%*/
 	ret = bq27541_read(di->client,BQ27x00_REG_FLAGS, buf, 2);
 	if (ret < 0) {
@@ -362,7 +362,7 @@ static int bq27541_battery_rsoc(struct bq27541_device_info *di)
 
 	if(status != POWER_SUPPLY_STATUS_FULL)
 		rsoc = min(rsoc, 99);
-
+#endif
 	DBG("Enter:%s %d--cal rsoc = %d\n",__FUNCTION__,__LINE__,rsoc);
 	#if defined (CONFIG_NO_BATTERY_IC)
 	rsoc = 100;

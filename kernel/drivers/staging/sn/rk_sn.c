@@ -6,8 +6,8 @@
 #include <linux/workqueue.h>
 #include <linux/delay.h>
 #include "../../mtd/rknand/api_flash.h"
-
-
+#include <linux/fs.h>
+#include <linux/device.h>
 
 static int rksn_debug = 0;
 module_param(rksn_debug, int, S_IRUGO|S_IWUSR|S_IWGRP);
@@ -24,7 +24,7 @@ struct rockchip_sn{
 	struct work_struct sn_work;
 };
 
- static struct kobject android_sn_kobj;
+ static struct kobject *android_sn_kobj;
  static char sn_buf[32] = {0};
 //static DEVICE_ATTR(snvalue, 0444, show_sn_value, NULL);
 // static DEVICE_ATTR(vendor, 0444, show_sn_value, NULL);
@@ -201,7 +201,63 @@ static void SN_get_timer(unsigned long data)
 	struct rockchip_sn *rk_sn = (struct rockchip_sn *)data;  
 	schedule_work(&rk_sn->sn_work);	
 }
-static int __init rk_sn_init(void)
+
+static ssize_t sn_check_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	char SN[32] = {0};
+	char *pbuf = (char *)kzalloc(512, GFP_KERNEL);
+
+	GetSNSectorInfo(pbuf);
+	unsigned short snlen = *(unsigned short *)pbuf;
+	memcpy(buf,pbuf+2,snlen);
+	kfree(pbuf);
+	return snlen;
+}
+
+
+static ssize_t sn_check_store(struct device *dev,
+		struct device_attribute *attr, char *buf,size_t count)
+{
+	//char buffer[3];
+	//int num=20;
+
+	return count;
+
+}
+
+
+static DEVICE_ATTR(sncheck, 0444, sn_check_show, sn_check_store);
+
+//static struct kobject *android_sn_kobj;
+static int sn_sysfs_init(void)
+{
+	int ret;
+
+	android_sn_kobj = kobject_create_and_add("android_sn", NULL);
+	if (android_sn_kobj == NULL) {
+		printk(KERN_ERR
+		       "sn_sysfs_init:"\
+		       "subsystem_register failed\n");
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	ret = sysfs_create_file(android_sn_kobj, &dev_attr_sncheck.attr);
+	if (ret) {
+		printk(KERN_ERR
+		       "sn_sysfs_init:"\
+		       "sysfs_create_group failed\n");
+		goto err4;
+	}
+	return 0 ;
+err4:
+	kobject_del(android_sn_kobj);
+err:
+	return ret ;
+}
+
+ static int __init rk_sn_init(void)
 {
 	int ret = 0;
 	struct rockchip_sn *rk_sn; 
@@ -214,12 +270,13 @@ static int __init rk_sn_init(void)
 	}
 	INIT_WORK(&rk_sn->sn_work,SN_get);
 	setup_timer(&rk_sn->sn_timer, SN_get_timer, (unsigned long)rk_sn);
-	rk_sn->sn_timer.expires  = jiffies + 1000;
+	rk_sn->sn_timer.expires  = jiffies + 2000;
 	add_timer(&rk_sn->sn_timer);
 	//spin_lock_init(&sn_spin);   
 	
 //sys_get_value();
 	//sn_sys_init();
+	sn_sysfs_init();
 	printk("%s.rksn_debug=%d..ok\n",__FUNCTION__,rksn_debug);
 	return 0;
 

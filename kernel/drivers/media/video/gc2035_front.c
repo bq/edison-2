@@ -22,7 +22,7 @@ o* Driver for MT9M001 CMOS Image Sensor from Micron
 #include <plat/rk_camera.h>
 #if lily_debug
 #include <linux/proc_fs.h>
-struct i2c_client * g_client;
+static struct i2c_client * g_client;
 #endif
 
 static int debug;
@@ -50,11 +50,11 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define SENSOR_NAME RK29_CAM_SENSOR_GC2035_FRONT
 #define SENSOR_V4L2_IDENT  V4L2_IDENT_GC2035_FRONT
 #define SENSOR_ID 0x2035
-#define SENSOR_MIN_WIDTH    800
-#define SENSOR_MIN_HEIGHT   600
+#define SENSOR_MIN_WIDTH     800
+#define SENSOR_MIN_HEIGHT    600
 #define SENSOR_MAX_WIDTH    1600
 #define SENSOR_MAX_HEIGHT   1200
-#define SENSOR_INIT_WIDTH	800			/* Sensor pixel size for sensor_init_data array */
+#define SENSOR_INIT_WIDTH	 800			/* Sensor pixel size for sensor_init_data array */
 #define SENSOR_INIT_HEIGHT  600
 #define SENSOR_INIT_WINSEQADR sensor_svga
 #define SENSOR_INIT_PIXFMT V4L2_MBUS_FMT_YUYV8_2X8
@@ -63,12 +63,12 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_Brightness	0
 #define CONFIG_SENSOR_Contrast      0
 #define CONFIG_SENSOR_Saturation    0
-#define CONFIG_SENSOR_Effect        1
+#define CONFIG_SENSOR_Effect        0
 #define CONFIG_SENSOR_Scene         1
 #define CONFIG_SENSOR_DigitalZoom   0
 #define CONFIG_SENSOR_Focus         0
-#define CONFIG_SENSOR_Exposure      1
-#define CONFIG_SENSOR_Flash         1
+#define CONFIG_SENSOR_Exposure      0
+#define CONFIG_SENSOR_Flash         0
 #define CONFIG_SENSOR_Mirror        0
 #define CONFIG_SENSOR_Flip          0
 
@@ -81,8 +81,8 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
                           SOCAM_HSYNC_ACTIVE_HIGH | SOCAM_VSYNC_ACTIVE_HIGH |\
                           SOCAM_DATA_ACTIVE_HIGH | SOCAM_DATAWIDTH_8  |SOCAM_MCLK_24MHZ)
 
-#define COLOR_TEMPERATURE_CLOUDY_DN  6500
-#define COLOR_TEMPERATURE_CLOUDY_UP    8000
+#define COLOR_TEMPERATURE_CLOUDY_DN     6500
+#define COLOR_TEMPERATURE_CLOUDY_UP      8000
 #define COLOR_TEMPERATURE_CLEARDAY_DN  5000
 #define COLOR_TEMPERATURE_CLEARDAY_UP    6500
 #define COLOR_TEMPERATURE_OFFICE_DN     3500
@@ -112,10 +112,9 @@ struct  flash_timer{
 static enum hrtimer_restart flash_off_func(struct hrtimer *timer);
 
 static struct  flash_timer flash_off_timer;
+static int flash_on_off=0;
 //for user defined if user want to customize the series , zyc
-#ifdef CONFIG_GC2035_USER_DEFINED_SERIES
-#include "gc2035_user_series.c"
-#else
+
 /* init 352X288 SVGA */
 static struct reginfo sensor_init_data[] ={
 	{0xfe,0x80},
@@ -130,8 +129,15 @@ static struct reginfo sensor_init_data[] ={
 	{0xfa,0x00},
 	{0xf6,0x00},
 	{0xf7,0x15}, //pll enable
+	#if defined(CONFIG_MALATA_D7806) || defined(CONFIG_MALATA_D8009)
+	{0xf8,0x84},
+	#else
 	{0xf8,0x85},
+	#endif
 	{0xfe,0x00},
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0xfa,0x11},
+	#endif
 	{0x82,0x00},
 	{0xb3,0x60},
 	{0xb4,0x40},
@@ -144,17 +150,18 @@ static struct reginfo sensor_init_data[] ={
 	{0xed,0x06},//04 2012.10.26
 	{0xee,0x62},//60 2012.10.26
 	{0xef,0x92},//90 2012.10.26
-
 		////=============================analog
-
 	{0x0a,0x00}, //row start
 	{0x0c,0x02}, //col start
 	{0x0d,0x04},
 	{0x0e,0xc0},
 	{0x0f,0x06}, //Window setting
 	{0x10,0x58}, 
-
+#if defined(CONFIG_MALATA_D7803) || defined(CONFIG_MALATA_D7005)
+	{0x17,0x17}, //[0]mirror [1]flip
+#else
 	{0x17,0x14}, //[0]mirror [1]flip
+#endif
 	{0x18,0x0a}, //0a 2012.10.26
 	{0x19,0x0a}, //AD pipe number
 
@@ -162,7 +169,7 @@ static struct reginfo sensor_init_data[] ={
 
 
 	{0x1b,0x8b},
-
+	{0x1c,0x05},//add by lanking 20130403
 	{0x1e,0x88}, //analog mode1 [7] tx-high en [5:3]COL_bias
 	{0x1f,0x08}, //[3] tx-low en//
 
@@ -176,20 +183,64 @@ static struct reginfo sensor_init_data[] ={
 		//AEC
 	{0xfe,0x01},
 	{0x11,0x20},//AEC_out_slope,0x
-	{0x1f,0x80},//max_post_gain
-	{0x20,0x40},//max_pre_gain
+	{0x1f,0xa0},//max_post_gain
+	{0x20,0x50},//max_pre_gain
 	{0x47,0x30},//AEC_outdoor_th
 	{0x0b,0x10},//
+	#if defined(CONFIG_MALATA_D1014)||defined(CONFIG_MALATA_D8009)
+	{0x13,0x7a},//y_target
+	#else
 	{0x13,0x80},//y_target
+	#endif
+
+		
+#if defined(CONFIG_MALATA_D7806) || defined(CONFIG_MALATA_D8009)
+
+	///banding for f8->0x84
+	{0xfe, 0x00},
+	{0x05 , 0x01},//hb
+	{0x06 , 0x05},
+	{0x07 , 0x00},//vb
+	{0x08 , 0x72},
+	{0xfe , 0x01},
+	{0x27 , 0x00},//step
+	{0x28 , 0x92},
+	{0x29 , 0x05},//level1
+	{0x2a , 0x22},
+	{0x2b , 0x05},//level2
+	{0x2c , 0xb4},
+	{0x2d , 0x05},////level3
+	{0x2e , 0xb4},
+	{0x2f , 0x07},//level4
+	{0x30 , 0x6a},
+	{0x3e , 0x40},  //0x40
+	{0xfe , 0x00},
+	
+#else
 	{0xfe,0x00},
+	{0x05 , 0x01},//hb
+	{0x06 , 0x11},
+	{0x07 , 0x00},//vb
+	{0x08 , 0x50},
+	{0xfe , 0x01},
+	{0x27 , 0x00},//step
+	{0x28 , 0xa0},
+	{0x29 , 0x05},//level1
+	{0x2a , 0x00},
+	{0x2b , 0x06},//level2
+	{0x2c , 0x40},
+	{0x2d , 0x07},//6e8//level3
+	{0x2e , 0x80},
+	{0x2f , 0x0f},//level4
+	{0x30 , 0x00},
+	{0x3e , 0x40},	
+#endif
+	{0xfe , 0x00},
+	{0xfe , 0x00},  //0x , 0x , 0x , 0x , 0x
+	{0xb6 , 0x03}, //AEC enable
+	{0xfe , 0x00},
 
-
-	{0xfe,0x00}, 
-	{0xb6,0x03}, //AEC enable
-	{0xfe,0x00},
-
-		////======================BLK
-
+	/////////BLK//////
 	{0x3f,0x00}, //prc close
 	{0x40,0x77},//
 	{0x42,0x7f},
@@ -205,21 +256,139 @@ static struct reginfo sensor_init_data[] ={
 	{0x64,0x20},
 	{0x65,0x20},
 
-		///=================block
-
-	{0x80,0xff},//
-	{0x81,0x26},//38},skin_Y 8c_debug
-	{0x87,0xb0}, //[7]middle gamma 
-	{0x03,0x05},
-	{0x04,0x2e}, 
+	///block////////////
+	{0x80,0xff},
+	{0x81,0x26},//38,0x//skin_Y 8c_debug
+	{0x87,0x90}, //[7]middle gamma 
 	{0x84,0x00}, //output put foramat
-	{0x86,0x03}, //sync plority
+	{0x86,0x07}, //02 //sync plority 
 	{0x8b,0xbc},
 	{0xb0,0x80}, //globle gain
 	{0xc0,0x40},//Yuv bypass
 
 
 		//===============================lsc
+
+   #if defined(CONFIG_MALATA_D1014)||defined(CONFIG_MALATA_D8009)
+     // 0x17 0x14
+      {0xfe, 0x00},
+      {0xae, 0x78},
+	{0xfe, 0x01},
+	{0xc2, 0x15},
+	{0xc3, 0x0c},
+	{0xc4, 0x04},
+	{0xc8, 0x15},
+	{0xc9, 0x0e},
+	{0xca, 0x03},
+	{0xbc, 0x24},
+	{0xbd, 0x10},
+	{0xbe, 0x0d},
+	{0xb6, 0x2e},
+	{0xb7, 0x1f},
+	{0xb8, 0x00},
+	{0xc5, 0x00},
+	{0xc6, 0x00},
+	{0xc7, 0x00},
+	{0xcb, 0x00},
+	{0xcc, 0x00},
+	{0xcd, 0x05},
+	{0xbf, 0x00},
+	{0xc0, 0x00},
+	{0xc1, 0x00},
+	{0xb9, 0x10},
+	{0xba, 0x0b},
+	{0xbb, 0x25},
+	{0xaa, 0x11},
+	{0xab, 0x1b},
+	{0xac, 0x0e},
+	{0xad, 0x0e},
+	{0xae, 0x12},
+	{0xaf, 0x12},
+	{0xb0, 0x1d},
+	{0xb1, 0x1a},
+	{0xb2, 0x19},
+	{0xb3, 0x13},
+	{0xb4, 0x16},
+	{0xb5, 0x11},
+	{0xd0, 0xf0},
+	{0xd2, 0xc0},
+	{0xd3, 0xf8},
+	{0xd8, 0xf0},
+	{0xda, 0xf0},
+	{0xdb, 0xf0},
+	{0xdc, 0x30},
+	{0xde, 0x40},
+	{0xdf, 0x50},
+	{0xd4, 0x20},
+	{0xd6, 0x30},
+	{0xd7, 0x48},
+	{0xa4, 0x00},
+	{0xa5, 0x00},
+	{0xa6, 0x06},
+	{0xa7, 0x00},
+	{0xa8, 0x00},
+	{0xa9, 0x00},
+	{0xa1, 0x80},
+	{0xa2, 0x80},
+	#elif defined(CONFIG_MALATA_D1013)
+	{0xfe, 0x01},
+	{0xc2, 0x15},
+{0xc3, 0x0c},  
+{0xc4, 0x04}, 
+{0xc8, 0x15},
+{0xc9, 0x0e},   
+{0xca, 0x03},  //
+{0xbc, 0x27},
+{0xbd, 0x10},  
+{0xbe, 0x0d},
+{0xb6, 0x2e},
+{0xb7, 0x1f},   
+{0xb8, 0x00},   //
+{0xc5, 0x00},
+{0xc6, 0x00},
+{0xc7, 0x00},
+{0xcb, 0x00},
+{0xcc, 0x00},  
+{0xcd, 0x05},  //
+{0xbf, 0x00},
+{0xc0, 0x00},
+{0xc1, 0x00},
+{0xb9, 0x10},
+{0xba, 0x0b},
+{0xbb, 0x25},   //
+{0xaa, 0x11},
+{0xab, 0x1b},
+{0xac, 0x0e},
+{0xad, 0x0e},
+{0xae, 0x12},
+{0xaf, 0x12},     ///
+{0xb0, 0x1d},
+{0xb1, 0x1a},
+{0xb2, 0x19},
+{0xb3, 0x13},
+{0xb4, 0x16},
+{0xb5, 0x11},    ///
+{0xd0, 0x25},
+{0xd2, 0x00},
+{0xd3, 0x39},
+{0xd8, 0x09},
+{0xda, 0x06},
+{0xdb, 0x0f},   ///
+{0xdc, 0x06},
+{0xde, 0x09},
+{0xdf, 0x0c},
+{0xd4, 0x10},
+{0xd6, 0x00},
+{0xd7, 0x25},    ///
+{0xa4, 0x00},
+{0xa5, 0x00},
+{0xa6, 0x06},
+{0xa7, 0x00},
+{0xa8, 0x00},
+{0xa9, 0x00},
+{0xa1, 0x80},
+{0xa2, 0x80},
+#else
 	{0xfe,0x01},
 	{0xc2,0x14},
 	{0xc3,0x0b},
@@ -231,7 +400,7 @@ static struct reginfo sensor_init_data[] ={
 	{0xbd,0x0c},
 	{0xbe,0x0b},
 	{0xb6,0x28},
-	{0xb7,0x18},
+	{0xb7,0x10},
 	{0xb8,0x00},
 	{0xc5,0x00},
 	{0xc6,0x00},
@@ -277,7 +446,7 @@ static struct reginfo sensor_init_data[] ={
 	{0xa9,0x00},
 	{0xa1,0x80},
 	{0xa2,0x80},
-
+       #endif
 		//=================================cc
 	{0xfe,0x02},
 	{0xc0,0x01},
@@ -601,7 +770,7 @@ static struct reginfo sensor_init_data[] ={
 	{0xfe,0x01},
 	{0x21,0xbf},
 	{0xfe,0x02},
-	{0xa4,0x00},//asde_offset_slope ?¡ì?????¡ê¡è
+	{0xa4,0x00},//asde_offset_slope
 	{0xa5,0x40}, //lsc_th
 	{0xa2,0xa0}, //lsc_dec_slope
 	{0xa6,0x80}, //dd_th
@@ -623,8 +792,16 @@ static struct reginfo sensor_init_data[] ={
 	{0x83,0x00},//[6]green_bks_auto [5]gobal_green_bks
 	{0x84,0x45},//RB offset
 		///=================YCP
+	#if defined(CONFIG_MALATA_D1014)||defined(CONFIG_MALATA_D8009)
+	{0xd1,0x34},//saturation_cb
+	{0xd2,0x33},//saturation_Cr
+	#elif defined(CONFIG_MALATA_D1013)
+	{0xd1,0x36},//saturation_cb
+	{0xd2,0x35},//saturation_Cr
+	#else
 	{0xd1,0x40},//saturation_cb
 	{0xd2,0x40},//saturation_Cr
+	#endif
 	{0xd3,0x40},//contrast 2012.10.26????¡ì?
 	{0xd4,0x80},//contrast center 2012.10.26????¡ì?
 	{0xd5,0xfc},//luma_offset 2012.10.26????¡ì?
@@ -663,11 +840,8 @@ static struct reginfo sensor_init_data[] ={
 	{0x27,0xec},
 	{0x28,0xf0},   //  0xf7
 	{0x29,0xf6},   //  0xff 
-
-	
-
 		///=================y gamma
-//y-gamma
+	{0xfe,0x02},
 	{0x2b,0x00},
 	{0x2c,0x04},
 	{0x2d,0x09},
@@ -681,23 +855,20 @@ static struct reginfo sensor_init_data[] ={
 	{0x35,0xc0},
 	{0x36,0xe0},
 	{0x37,0xf0},   // 0xff
-
-	
-
 		/////1600x1200size// 
 	{0xfe,0x00},//
 	{0x90,0x01}, //0x//crop enable
+	{0x94 , 0x04},// x_start   hhs_0609
 	{0x95,0x04},//1600x1200
 	{0x96,0xb0},
 	{0x97,0x06},
 	{0x98,0x40},
-
 	{0xfe,0x03},
 	{0x42,0x40}, 
 	{0x43,0x06}, //output buf width 800x2
 	{0x41,0x02}, // Pclk_polarity
 	{0x40,0x40},
-	{0x17,0x00}, //widv 
+	{0x17,0x00}, //widv
 	{0xfe,0x00},
 
 		////output DVP/////
@@ -708,78 +879,88 @@ static struct reginfo sensor_init_data[] ={
 	{0xf3,0xff},
 	{0xf4,0x00},
 	{0xf5,0x30},
-
-
-
-{0xfe , 0x00},
-
-	{0x0a , 0x00}, //row start
-	{0x0c , 0x00}, //col start
-
-	{0x0d , 0x04},
-	{0x0e , 0xc0},
-	{0x0f , 0x06}, //Window setting
-	{0x10 , 0x58},// 
-
-
+      ////////sabsumple  800X600//////
+	{0xfe,0x00},	
+	{0xfa,0x00},
+	{0xc8,0x00},
+	{0x99,0x22},
+	{0x9a,0x07},
+	{0x9b,0x00},  
+	{0x9c,0x00},
+	{0x9d,0x00},
+	{0x9e,0x00},
+	{0x9f,0x00},
+	{0xa0,0x00},
+	{0xa1,0x00},
+	{0xa2,0x00},
+	{0x90,0x01},
+	{0x95,0x02},
+	{0x96,0x58},
+	{0x97,0x03},
+	{0x98,0x20},
+	
+ #if 0   
+        /////////  re zao///
 	{0xfe,0x00},
-	{0xec,0x04},
-	{0xed,0x04},
-	{0xee,0x60},
-	{0xef,0x90},
-{0x05,0x01},//hb
-	{0x06,0x11},
-	{0x07,0x00},//vb
-	{0x08,0x50},
+	{0x22,0xd0},
 	{0xfe,0x01},
-	{0x27,0x00},//step
-	{0x28,0xa0},
-	{0x29,0x05},//level1
-	{0x2a,0x00},
-	{0x2b,0x06},//level2
-	{0x2c,0x40},
-	{0x2d,0x07},//6e8//level3
-	{0x2e,0x80},
-	{0x2f,0x0f},//level4
-	{0x30,0x00},
-	
-
-
-
-
-	{0xfe,0x00},
-	{0xb6,0x03},//aec on
-
-/*********************/
+	{0x21,0xff},
+	{0xfe,0x02},  
+	{0x8a,0x33},
+	{0x8c,0x76},
+	{0x8d,0x85},
+	{0xa6,0xf0},	
+	{0xae,0x9f},
+	{0xa2,0x90},
+	{0xa5,0x40},  
+	{0xa7,0x30},
+	{0xb0,0x88},
+	{0x38,0x0b},
+	{0x39,0x30},
 	{0xfe,0x00},  
-	//subsample for svga
-	{0x0c,0x04}, //col  start	
-	{0x0d,0x04},
-	{0x0e,0xc0},
-	{0x0f,0x06},
-	{0x10,0x56},  //50	
-	{0x99,0x22},	
-	{0x9b,0x00},	
-	{0x9f,0x00},	
-	{0x90,0x01},	
-	{0x95,0x02},	
-	{0x96,0x58},//600
-	{0x97,0x03},	
-	{0x98,0x20},//800
+	{0x87,0xb0},
 
-
-
-	{0xfe,0x03},
-	{0x42,0x80}, 
-	{0x43,0x06}, //output buf width
-	{0x41,0x00}, // delay
-	{0x40,0x00}, //fifo half full trig
-	{0x17,0x01}, //widv 
-	{0xfe,0x00},
-	{0xc8,0x00}, 
+       //// small  RGB gamma////
+	{0xfe , 0x02},
+	{0x15 , 0x0b},
+	{0x16 , 0x0e},
+	{0x17 , 0x10},
+	{0x18 , 0x12},
+	{0x19 , 0x19},
+	{0x1a , 0x21},
+	{0x1b , 0x29},
+	{0x1c , 0x31},
+	{0x1d , 0x41},
+	{0x1e , 0x50},
+	{0x1f , 0x5f},
+	{0x20 , 0x6d},
+	{0x21 , 0x79},
+	{0x22 , 0x91},
+	{0x23 , 0xa5},
+	{0x24 , 0xb9},
+	{0x25 , 0xc9},
+	{0x26 , 0xe1},
+	{0x27 , 0xee},
+	{0x28 , 0xf7},
+	{0x29 , 0xff},
 	
-	{0xfa,0x00}, 
-
+ 	////dark sun/////
+	{0xfe , 0x02},
+	{0x40 , 0x06},
+	{0x41 , 0x23},
+	{0x42 , 0x3f},
+	{0x43 , 0x06},
+	{0x44 , 0x00},
+	{0x45 , 0x00},
+	{0x46 , 0x14},
+	{0x47 , 0x09},
+ 
+  #endif
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0xfa,0x11},
+	#else
+	{0xfa,0x00},
+	#endif
 	{0x00,0x00}, 
 };
 	
@@ -789,42 +970,26 @@ static struct reginfo sensor_init_data[] ={
 static struct reginfo sensor_uxga[] = 
 {
  
- 
-	{0xfe , 0x00},
-	{0x0a , 0x00}, //row start
-	{0x0c , 0x00}, //col start
-
-	{0x0d , 0x04},
-	{0x0e , 0xc0},
-	{0x0f , 0x06}, //Window setting
-	{0x10 , 0x58},// 
-
-	{0x90 , 0x01},  //crop enable
-	{0x94 , 0x04},// x_start
-	{0x95 , 0x04},
-	{0x96 , 0xb0},
-	{0x97 , 0x06},
-	{0x98 , 0x40},
-	{0x99 , 0x11},
-	{0xc8 , 0x00},
- 
-	{0xfa , 0x11},
-
-
-	{0xfe , 0x03},
-	{0x42 , 0x80}, 
-	{0x43 , 0x06}, //output buf width
-	{0x41 , 0x00}, // delay
-	{0x40 , 0x00}, //fifo half full trig
-	{0x17 , 0x01}, //widv 
-	{0xfe , 0x00},
-	{0xc8 , 0x00},
-
-
-
-	{0x00 , 0x00}, 
-
-
+  	 ////////sabsumple  1600X1200//////
+	{0xfe,0x00},	
+	{0xfa,0x11},
+	{0xc8,0x00},
+	{0x99,0x11},
+	{0x9a,0x06},
+	{0x9b,0x00},
+	{0x9c,0x00},
+	{0x9d,0x00},
+	{0x9e,0x00},
+	{0x9f,0x00},
+	{0xa0,0x00},
+	{0xa1,0x00},
+	{0xa2,0x00},
+	{0x90,0x01},
+	{0x95,0x04},
+	{0x96,0xb0},
+	{0x97,0x06},
+	{0x98,0x40},
+	{0x00,0x00}, 
 };
 
 	
@@ -832,28 +997,26 @@ static struct reginfo sensor_uxga[] =
 /* 1280X1024 SXGA */
 static struct reginfo sensor_sxga[] =
 {
-	
-	{0x0, 0x0},
+	{0x00,0x00}, 
 };
-
-
 static struct reginfo sensor_720p[] =
 {
-
+       {0x00,0x00},
 	{0xfe ,0x00},
-	{0x0a ,0xf0}, //row start
-	{0x0c ,0xa0}, //col start 
-	{0x0d ,0x02},
-	{0x0e ,0xd8},
-	{0x0f ,0x05}, //Window setting
-	{0x10 ,0x18},   
+	{0x0a ,0x00}, //row start   f0
+	{0x0c ,0x00}, //col start     a0
+	{0x0d ,0x04},
+	{0x0e ,0xc0},
+	{0x0f ,0x06}, //Window setting
+	{0x10 ,0x58}, 
+	//measure window	
 	{0xfe,0x00},
 	{0xec,0x04},
 	{0xed,0x04},
 	{0xee,0x50},
 	{0xef,0x58},
-{0x05 , 0x01},//hb
-	{0x06 , 0xaa},
+	{0x05 , 0x01},//hb
+	{0x06 , 0x11},
 	{0x07 , 0x00},//b
 	{0x08 , 0xf6},
 	{0xfe , 0x01},
@@ -866,17 +1029,11 @@ static struct reginfo sensor_720p[] =
 	{0x2d , 0x06},//level3   10
 	{0x2e , 0x4a},
 	{0x2f , 0x07},//level4  8
-	{0x30 , 0x8c},
-	
+	{0x30 , 0x8c},	
 	{0x3e,0x40},//0x40 0x00
-
-	//measure window
 	{0xfe,0x00},
 	{0xb6,0x03},//aec on
-	{0xec,0x04},
-	{0xed,0x04},
-	{0xee,0x50},
-	{0xef,0x58},
+	{0x9a,0x06},  //0x07
 	{0x99,0x11},
 	{0x90 ,0x01},  //crop enable
 	{0x95 ,0x02},
@@ -884,97 +1041,80 @@ static struct reginfo sensor_720p[] =
 	{0x97 ,0x05},
 	{0x98 ,0x00},   
 
-
+#if 0
 	{0xfe ,0x03},
 	{0x42 ,0x80}, 
 	{0x43 ,0x06}, //output buf width
 	{0x41 ,0x00}, // delay
 	{0x40 ,0x00}, //fifo half full trig
 	{0x17 ,0x01}, //widv 
+#endif
 	{0xfe ,0x00},
-
-
 	{0xc8,0x00},
-
 	{0xfa,0x11},
-
-	{0x00 , 0x00},
-
+	{0x00,0x00},
 };
 
 /* 800X600 SVGA*/
 static struct reginfo sensor_svga[] =
 {	
-	{0xfe,0x00},
-
+       ////////sabsumple  800X600//////
+	{0xfe ,0x00},
 	{0x0a,0x00}, //row start
 	{0x0c,0x00}, //col start
-
 	{0x0d,0x04},
 	{0x0e,0xc0},
 	{0x0f,0x06}, //Window setting
-	{0x10,0x58},// 
+	{0x10,0x58}, 
 
-
-	{0xfe,0x00},
-	{0xec,0x04},
-	{0xed,0x04},
-	{0xee,0x60},
-	{0xef,0x90},
-{0x05,0x01},//hb
-	{0x06,0x11},
-	{0x07,0x00},//vb
-	{0x08,0x50},
-	{0xfe,0x01},
-	{0x27,0x00},//step
-	{0x28,0xa0},
-	{0x29,0x05},//level1
-	{0x2a,0x00},
-	{0x2b,0x06},//level2
-	{0x2c,0x40},
-	{0x2d,0x07},//6e8//level3
-	{0x2e,0x80},
-	{0x2f,0x0f},//level4
-	{0x30,0x00},
-	
-
-
-
-
+	//measure window
 	{0xfe,0x00},
 	{0xb6,0x03},//aec on
-
-/*********************/
-	{0xfe,0x00},  
-	//subsample for svga
-	{0x0c,0x04}, //col  start	
-	{0x0d,0x04},
-	{0x0e,0xc0},
-	{0x0f,0x06},
-	{0x10,0x56},  //50	
-	{0x99,0x22},	
-	{0x9b,0x00},	
-	{0x9f,0x00},	
-	{0x90,0x01},	
-	{0x95,0x02},	
-	{0x96,0x58},//600
-	{0x97,0x03},	
-	{0x98,0x20},//800
-
-
-
-	{0xfe,0x03},
-	{0x42,0x80}, 
-	{0x43,0x06}, //output buf width
-	{0x41,0x00}, // delay
-	{0x40,0x00}, //fifo half full trig
-	{0x17,0x01}, //widv 
 	{0xfe,0x00},
-	{0xc8,0x00}, 
-	
+	{0xec,0x06},//04 2012.10.26
+	{0xed,0x06},//04 2012.10.26
+	{0xee,0x62},//60 2012.10.26
+	{0xef,0x92},//90 2012.10.26	
+	{0x05 , 0x01},//hb
+	{0x06 , 0x11},
+	{0x07 , 0x00},//vb
+	{0x08 , 0x50},
+	{0xfe , 0x01},
+	{0x27 , 0x00},//step
+	{0x28 , 0xa0},
+	{0x29 , 0x05},//level1
+	{0x2a , 0x00},
+	{0x2b , 0x05},//level2
+	{0x2c , 0x00},
+	{0x2d , 0x06},//6e8//level3
+	{0x2e , 0xe0},
+	{0x2f , 0x0a},//level4
+	{0x30 , 0x00},
+	//{0x3e , 0x40},
+	{0xfe,0x00},	
+	{0xb6,0x03},	
+	{0xfa,0x00},
+	{0xc8,0x00},
+	{0x99,0x22},
+	{0x9a,0x07},
+	{0x9b,0x00},  
+	{0x9c,0x00},
+	{0x9d,0x00},
+	{0x9e,0x00},
+	{0x9f,0x00},  
+	{0xa0,0x00},
+	{0xa1,0x00},
+	{0xa2,0x00},
+	{0x90,0x01},
+	{0x95,0x02},
+	{0x96,0x58},  
+	{0x97,0x03},
+	{0x98,0x20},
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0xfa,0x11},
+	#else
 	{0xfa,0x00}, 
-
-
+	#endif
 	{0x00 , 0x00},
 
 	/*************************/
@@ -1011,7 +1151,6 @@ static struct reginfo sensor_qcif[] =
 	
     {0x0, 0x0},
 };
-#endif
 
 static  struct reginfo sensor_ClrFmt_YUYV[]=
 {
@@ -1041,10 +1180,10 @@ static  struct reginfo sensor_WhiteB_Cloudy[]=
 			{0x82, 0xfc},
 			{0xb3, 0x58},
 			{0xb4, 0x32},
-			{0xb5, 0x42},	
-			{0x0, 0x0},
+			{0xb5, 0x42},
+	              {0x0, 0x0},
 };
-/* ClearDay Colour Temperature : 5000K - 6500K  */    // taiyangguang
+/* ClearDay Colour Temperature : 5000K - 6500K  */
 static  struct reginfo sensor_WhiteB_ClearDay[]=
 {
     //Sunny
@@ -1052,10 +1191,10 @@ static  struct reginfo sensor_WhiteB_ClearDay[]=
 			{0x82, 0xfc},
 			{0xb3, 0x50},
 			{0xb4, 0x32},
-			{0xb5, 0x42},	
+			{0xb5, 0x42},
 			{0x0, 0x0},
 };
-/* Office Colour Temperature : 3500K - 5000K  */   // diandengpao
+/* Office Colour Temperature : 3500K - 5000K  */
 static  struct reginfo sensor_WhiteB_TungstenLamp1[]=
 {
     //Office
@@ -1068,7 +1207,7 @@ static  struct reginfo sensor_WhiteB_TungstenLamp1[]=
 			
 
 };
-/* Home Colour Temperature : 2500K - 3500K  */     // yingguangdeng
+/* Home Colour Temperature : 2500K - 3500K  */
 static  struct reginfo sensor_WhiteB_TungstenLamp2[]=
 {
     //Home
@@ -1089,7 +1228,10 @@ static  struct reginfo sensor_Brightness0[]=
 {
     // Brightness -2
   
-	
+	{0xfe, 0x01},
+	{0x13, 0x70},
+	{0xfe, 0x02},
+	{0xd5, 0xe0},
        {0x00, 0x00},
 };
 
@@ -1097,7 +1239,10 @@ static  struct reginfo sensor_Brightness1[]=
 {
     // Brightness -1
  
-	
+	{0xfe, 0x01},
+	{0x13, 0x78},
+	{0xfe, 0x02},
+	{0xd5, 0xf0},
        {0x00, 0x00}
 };
 
@@ -1105,28 +1250,40 @@ static  struct reginfo sensor_Brightness2[]=
 {
     //  Brightness 0
 
-	
+	{0xfe, 0x01},
+	{0x13, 0x80},
+	{0xfe, 0x02},
+	{0xd5, 0x00},
        {0x00, 0x00}
 };
 
 static  struct reginfo sensor_Brightness3[]=
 {
     // Brightness +1
-	
+	{0xfe, 0x01},
+	{0x13, 0x88},
+	{0xfe, 0x02},
+	{0xd5, 0x10},
        {0x00, 0x00}
 };
 
 static  struct reginfo sensor_Brightness4[]=
 {
     //  Brightness +2
-
+	{0xfe, 0x01},
+	{0x13, 0x90},
+	{0xfe, 0x02},
+	{0xd5, 0x20},
        {0x00, 0x00}
 };
 
 static  struct reginfo sensor_Brightness5[]=
 {
     //  Brightness +3
-	
+	{0xfe, 0x01},
+	{0x13, 0x98},
+	{0xfe, 0x02},
+	{0xd5, 0x30},
 
 	{0x00, 0x00}
 };
@@ -1309,10 +1466,10 @@ static  struct reginfo sensor_Exposure6[]=
     	{0xfe,0x00},
        {0x00,0x00}
 };
+
 static struct reginfo *sensor_ExposureSeqe[] = {sensor_Exposure0, sensor_Exposure1, sensor_Exposure2, sensor_Exposure3,
     sensor_Exposure4, sensor_Exposure5,sensor_Exposure6,NULL,
 };
-
 #endif
 #if CONFIG_SENSOR_Saturation
 static  struct reginfo sensor_Saturation0[]=
@@ -1482,6 +1639,8 @@ static const struct v4l2_querymenu sensor_menus[] =
 	#if CONFIG_SENSOR_Flash
     { .id = V4L2_CID_FLASH,  .index = 0,  .name = "off",  .reserved = 0, }, {  .id = V4L2_CID_FLASH,  .index = 1, .name = "auto",  .reserved = 0,},
     { .id = V4L2_CID_FLASH,  .index = 2,  .name = "on", .reserved = 0,}, {  .id = V4L2_CID_FLASH, .index = 3,  .name = "torch", .reserved = 0,},
+    // honghaishen_test hhs_1224
+    { .id = V4L2_CID_OPEN_FLASH,  .index = 0,  .name = "off",  .reserved = 0, }, {  .id = V4L2_CID_OPEN_FLASH,  .index = 1, .name = "on",  .reserved = 0,},
     #endif
 };
 
@@ -1642,6 +1801,16 @@ static  struct v4l2_queryctrl sensor_controls[] =
         .name		= "Flash Control",
         .minimum	= 0,
         .maximum	= 3,
+        .step		= 1,
+        .default_value = 0,
+    },
+    // honghaishen_test hhs_1224
+   {
+        .id		= V4L2_CID_OPEN_FLASH,
+        .type		= V4L2_CTRL_TYPE_MENU,
+        .name		= "Flash status",
+        .minimum	= 0,
+        .maximum	= 1,
         .step		= 1,
         .default_value = 0,
     },
@@ -1924,7 +2093,6 @@ static int sensor_ioctrl(struct soc_camera_device *icd,enum rk29sensor_power_cmd
 	{	
 		case Sensor_PowerDown:
 		{
- 	   // honghaishen_test
 			if (icl->powerdown) {
 				ret = icl->powerdown(icd->pdev, on);
 				if (ret == RK29_CAM_IO_SUCCESS) {
@@ -1949,11 +2117,6 @@ static int sensor_ioctrl(struct soc_camera_device *icd,enum rk29sensor_power_cmd
 
 			if (sensor->sensor_io_request && sensor->sensor_io_request->sensor_ioctrl) {
 				sensor->sensor_io_request->sensor_ioctrl(icd->pdev,Cam_Flash, on);
-                if(on){
-                    //flash off after 2 secs
-            		hrtimer_cancel(&(flash_off_timer.timer));
-            		hrtimer_start(&(flash_off_timer.timer),ktime_set(0, 800*1000*1000),HRTIMER_MODE_REL);
-                    }
 			}
             break;
 		}
@@ -1972,6 +2135,13 @@ static enum hrtimer_restart flash_off_func(struct hrtimer *timer){
 	SENSOR_DG("%s %s !!!!!!",SENSOR_NAME_STRING(),__FUNCTION__);
     return 0;
     
+}
+static enum hrtimer_restart flash_on_func(struct hrtimer *timer){
+	struct flash_timer *fps_timer = container_of(timer, struct flash_timer, timer);
+	sensor_ioctrl(fps_timer->icd,Sensor_Flash,Flash_On);
+	flash_off_timer.timer.function = flash_off_func;
+	hrtimer_forward_now(&(flash_off_timer.timer), ktime_set(0, 700*1000*1300));
+	return HRTIMER_RESTART;
 }
 static int sensor_init(struct v4l2_subdev *sd, u32 val)
 {
@@ -2011,7 +2181,7 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
     }
 
     pid |= (value & 0xff);
-    SENSOR_DG("\n %s  pid = 0x%x\n", SENSOR_NAME_STRING(), pid);
+    SENSOR_TR("\n %s() %s  pid = 0x%x\n",__func__, SENSOR_NAME_STRING(), pid);
     if (pid == SENSOR_ID) {
         sensor->model = SENSOR_V4L2_IDENT;
     } else {
@@ -2112,6 +2282,7 @@ static int sensor_deactivate(struct i2c_client *client)
     if (sensor->info_priv.funmodule_state & SENSOR_INIT_IS_OK) {
     }
 	sensor_ioctrl(icd, Sensor_PowerDown, 1);
+	sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
     msleep(100); 
 
 	/* ddl@rock-chips.com : sensor config init width , because next open sensor quickly(soc_camera_open -> Try to configure with default parameters) */
@@ -2244,6 +2415,7 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
 	struct soc_camera_device *icd = client->dev.platform_data;
     struct reginfo *winseqe_set_addr=NULL;
     int ret=0, set_w,set_h;
+	int hhs_h;
 #if  1
 char value;
 unsigned   int pid=0,shutter,temp_reg;
@@ -2285,7 +2457,8 @@ unsigned   int pid=0,shutter,temp_reg;
 
     set_w = mf->width;
     set_h = mf->height;
-
+	hhs_h = mf->height;
+	
 	if (((set_w <= 176) && (set_h <= 144)) && sensor_qcif[0].reg)
 	{
 		winseqe_set_addr = sensor_qcif;
@@ -2346,12 +2519,14 @@ unsigned   int pid=0,shutter,temp_reg;
         #if CONFIG_SENSOR_Flash
         if (sensor_fmt_capturechk(sd,mf) == true) {      /* ddl@rock-chips.com : Capture */
             if ((sensor->info_priv.flash == 1) || (sensor->info_priv.flash == 2)) {
-                sensor_ioctrl(icd, Sensor_Flash, Flash_On);
+		// honghaishen_test hhs_1224
+               // sensor_ioctrl(icd, Sensor_Flash, Flash_On);  
                 SENSOR_DG("%s flash on in capture!\n", SENSOR_NAME_STRING());
             }           
         } else {                                        /* ddl@rock-chips.com : Video */
             if ((sensor->info_priv.flash == 1) || (sensor->info_priv.flash == 2)) {
-                sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
+		// honghaishen_test hhs_1224
+             //   sensor_ioctrl(icd, Sensor_Flash, Flash_Off);   
                 SENSOR_DG("%s flash off in preivew!\n", SENSOR_NAME_STRING());
             }
         }
@@ -2361,12 +2536,20 @@ unsigned   int pid=0,shutter,temp_reg;
 	sensor_write(client, 0xb6, 0x00);  // AEC ON
 	sensor_write(client, 0x03, shutter_h);
 	sensor_write(client, 0x04, shutter_l);
-      // msleep(50);
+     //  msleep(50);
 	printk("set preview for rewrite 0x03");
 	
 	} 
+	/*[A]fixed the issue add 720p recording,xmhhs,20130222*/
+	if(winseqe_set_addr == sensor_720p ||sensor->info_priv.winseqe_cur_addr == sensor_720p)
+		sensor_write_array(client,sensor_init_data);
+	/*[A]END xmhhs,20130222,Bug-Id<RK-69>*/
         ret |= sensor_write_array(client, winseqe_set_addr);
-#if 1
+	/*[A]fixed the issue add 720p recording,xmhhs,20130222*/
+		if(winseqe_set_addr == sensor_720p)
+		msleep(500);
+	/*[A]END xmhhs,20130222,Bug-Id<RK-69>*/
+	#if 1
 		if (winseqe_set_addr == sensor_uxga) { 
 
 
@@ -2391,7 +2574,8 @@ unsigned   int pid=0,shutter,temp_reg;
             #if CONFIG_SENSOR_Flash
             if (sensor_fmt_capturechk(sd,mf) == true) {
                 if ((sensor->info_priv.flash == 1) || (sensor->info_priv.flash == 2)) {
-                    sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
+			// honghaishen_test hhs_1224
+                 //   sensor_ioctrl(icd, Sensor_Flash, Flash_Off);   hhs
                     SENSOR_TR("%s Capture format set fail, flash off !\n", SENSOR_NAME_STRING());
                 }
             }
@@ -2402,22 +2586,22 @@ unsigned   int pid=0,shutter,temp_reg;
         sensor->info_priv.winseqe_cur_addr  = (int)winseqe_set_addr;
 
 		if (sensor_fmt_capturechk(sd,mf) == true) {				    /* ddl@rock-chips.com : Capture */
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
 			if (sensor->info_priv.whiteBalance != 0) {
 				qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 				sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
 			}
 			sensor->info_priv.snap2preview = true;
 		} else if (sensor_fmt_videochk(sd,mf) == true) {			/* ddl@rock-chips.com : Video */
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
 			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
 			sensor->info_priv.video2preview = true;
 		} else if ((sensor->info_priv.snap2preview == true) || (sensor->info_priv.video2preview == true)) {
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
 			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
             //msleep(600);
@@ -2431,11 +2615,23 @@ unsigned   int pid=0,shutter,temp_reg;
     {
         SENSOR_DG("\n %s .. Current Format is validate. icd->width = %d.. icd->height %d\n",SENSOR_NAME_STRING(),set_w,set_h);
     }
-
+	if(flash_on_off == 1)
+	{
+		sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
+		flash_on_off =0 ;
+		flash_off_timer.timer.function = flash_on_func;
+		hrtimer_cancel(&(flash_off_timer.timer));
+       	hrtimer_start(&(flash_off_timer.timer),ktime_set(0, 250*1000*1200),HRTIMER_MODE_REL);
+	}
 	mf->width = set_w;
     mf->height = set_h;
+	sensor_write(client, 0xfe, 0x00);
+	if(hhs_h == 720)
+	{
+           sensor_write(client, 0xb6, 0x03);
+	}
+ //    Sensor_CropSet(mf,20);  if the fov is not pass , we can change the value;
 	//msleep(100);
-
 sensor_s_fmt_end:
     return ret;
 }
@@ -2787,11 +2983,37 @@ static int sensor_set_digitalzoom(struct soc_camera_device *icd, const struct v4
 }
 #endif
 #if CONFIG_SENSOR_Flash
+// honghaishen_test hhs_1224
+static int sensor_set_flash(struct soc_camera_device *icd, const struct v4l2_queryctrl *qctrl, int value)
+{    
+    if ((value >= qctrl->minimum) && (value <= qctrl->maximum)) {
+        if (value == 3) 
+	{       /* ddl@rock-chips.com: torch */
+            sensor_ioctrl(icd, Sensor_Flash, Flash_Torch_On);   /* Flash On */
+        }
+	else if(value ==2)
+	{
+        	sensor_ioctrl(icd, Sensor_Flash, Flash_Torch_On);
+		flash_on_off = 1;
+	}
+	else if(value ==0)
+	{
+            sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
+        }
+        SENSOR_DG("%s..%s : %x\n",SENSOR_NAME_STRING(),__FUNCTION__, value);
+        return 0;
+    }
+    
+	SENSOR_TR("\n %s..%s valure = %d is invalidate..    \n",SENSOR_NAME_STRING(),__FUNCTION__,value);
+    return -EINVAL;
+}
+
+#if 0
 static int sensor_set_flash(struct soc_camera_device *icd, const struct v4l2_queryctrl *qctrl, int value)
 {    
     if ((value >= qctrl->minimum) && (value <= qctrl->maximum)) {
         if (value == 3) {       /* ddl@rock-chips.com: torch */
-            sensor_ioctrl(icd, Sensor_Flash, Flash_Torch_On);   /* Flash On */
+            sensor_ioctrl(icd, Sensor_Flash, Flash_Torch);   /* Flash On */
         } else {
             sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
         }
@@ -2802,6 +3024,7 @@ static int sensor_set_flash(struct soc_camera_device *icd, const struct v4l2_que
 	SENSOR_TR("\n %s..%s valure = %d is invalidate..    \n",SENSOR_NAME_STRING(),__FUNCTION__,value);
     return -EINVAL;
 }
+#endif
 #endif
 
 static int sensor_g_control(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
@@ -2984,6 +3207,7 @@ static int sensor_s_control(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 static int sensor_g_ext_control(struct soc_camera_device *icd , struct v4l2_ext_control *ext_ctrl)
 {
     const struct v4l2_queryctrl *qctrl;
+	char y_value=0;
     struct i2c_client *client = to_i2c_client(to_soc_camera_control(icd));
     struct sensor *sensor = to_sensor(client);
 
@@ -3030,6 +3254,18 @@ static int sensor_g_ext_control(struct soc_camera_device *icd , struct v4l2_ext_
                 ext_ctrl->value = sensor->info_priv.flash;
                 break;
             }
+		// honghaishen_test hhs_1224 start
+	case V4L2_CID_OPEN_FLASH:
+		{
+	         sensor_write(client, 0xfe, 0x01);
+		 sensor_read(client, 0x14, &y_value);
+		 sensor_write(client, 0xfe, 0x00);
+		 if(y_value > 0x40)
+		 	ext_ctrl ->value = 0;
+		 else 
+		 	ext_ctrl->value =1;	
+		}
+	// honghaishen_test hhs_1224 end
         default :
             break;
     }
@@ -3244,7 +3480,7 @@ static int sensor_video_probe(struct soc_camera_device *icd,
     }
 
     pid |= (value & 0xff);
-    SENSOR_DG("\n %s  pid = 0x%x\n", SENSOR_NAME_STRING(), pid);
+    SENSOR_TR("\n %s() %s  pid = 0x%x\n",__func__, SENSOR_NAME_STRING(), pid);
     if (pid == SENSOR_ID) {
         sensor->model = SENSOR_V4L2_IDENT;
     } else {
@@ -3265,9 +3501,9 @@ static long sensor_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
     struct soc_camera_device *icd = client->dev.platform_data;
     struct sensor *sensor = to_sensor(client);
-#if CONFIG_SENSOR_Flash
+//#if CONFIG_SENSOR_Flash
     int i;
-#endif
+//#endif
     int ret = 0;
     
 	SENSOR_DG("\n%s..%s..cmd:%x \n",SENSOR_NAME_STRING(),__FUNCTION__,cmd);
@@ -3343,6 +3579,11 @@ static int sensor_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
 	*code = sensor_colour_fmts[index].code;
 	return 0;
 }
+static int sensor_s_stream(struct v4l2_subdev *sd, int enable)    // honghaishen_test hhs_0111
+{
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct soc_camera_device *icd = client->dev.platform_data;
+}
 static struct v4l2_subdev_core_ops sensor_subdev_core_ops = {
 	.init		= sensor_init,
 	.g_ctrl		= sensor_g_control,
@@ -3358,6 +3599,7 @@ static struct v4l2_subdev_video_ops sensor_subdev_video_ops = {
 	.g_mbus_fmt	= sensor_g_fmt,
 	.try_mbus_fmt	= sensor_try_fmt,
 	.enum_mbus_fmt	= sensor_enum_fmt,
+	.s_stream = sensor_s_stream,
 };
 
 static struct v4l2_subdev_ops sensor_subdev_ops = {
@@ -3536,10 +3778,6 @@ module_exit(sensor_mod_exit);
 MODULE_DESCRIPTION(SENSOR_NAME_STRING(Camera sensor driver));
 MODULE_AUTHOR("ddl <kernel@rock-chips>");
 MODULE_LICENSE("GPL");
-
-
-
-
 
 
 

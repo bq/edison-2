@@ -71,6 +71,13 @@ config WM8350_POWER
           Say Y here to enable support for the power management unit
 	  provided by the Wolfson Microelectronics WM8350 PMIC.
 
+config BATTERY_RICOH619
+	tristate "Ricoh RC5T619 PMIC battery driver"
+	depends on MFD_RICOH619 && I2C && GENERIC_HARDIRQS
+	help
+	  Say Y to enable support for the battery control of the Ricoh RC5T619
+	  Power Management device.
+
 config TEST_POWER
 	tristate "Test power driver"
 	help
@@ -229,7 +236,7 @@ config BATTERY_BQ27541
 	depends on I2C
 	help
 	  Say Y here to enable support for batteries with BQ27541(I2C) chip.
-
+	
 config BATTERY_BQ27425
 	tristate "BQ27425 battery driver"
 	depends on I2C
@@ -241,7 +248,6 @@ config BATTERY_BQ27410
 	depends on I2C
 	help
 	  Say Y here to enable support for batteries with BQ27410(I2C) chip.
-
 config BATTERY_BQ3060
 	tristate "BQ3060 battery driver"
 	depends on I2C && ARCH_RK29
@@ -372,17 +378,23 @@ config BATTERY_RK30_USB_CHARGE
           say Y to enable suspport for the USB battery charge
 
 config BATTERY_RK30_USB_AND_CHARGE
-        tristate "RK30 USB AND CHARGE"
+        bool "RK30 USB AND CHARGE"
         depends on BATTERY_RK30_ADC||BATTERY_RK30_ADC_FAC
         help
           say Y to enable suspport for the AC battery charge
 
+config BATTERY_RK30_USB_AND_DC_CHARGE
+        bool "RK30 USB AND DC CHARGE"
+        depends on BATTERY_RK30_ADC||BATTERY_RK30_ADC_FAC
+        default n
+        help
+          say Y to enable suspport for the AC battery charge
 config BATTERY_RK30_VOL3V8
        tristate "the battery voltage is 3.8V"
         depends on BATTERY_RK30_ADC||BATTERY_RK30_ADC_FAC
         help
           say Y to enable suspport for the battery voltage 3.8V	
-
+	  
 choice
 	prompt "Support battery type"
 	default BATTERY_BT_B0BFN_3474107
@@ -411,6 +423,10 @@ config BATTERY_BT_D001_386789
 config BATTERY_BT_C0B5
         bool "BT-C0B5 3200mA"
 endchoice
+config CW2015_BATTERY
+	tristate "CW2015 battery driver"
+	help
+	  Say Y to enable support for the cw2015 on the Rockchip
 
 config POWER_ON_CHARGER_DISPLAY
 	bool "Support charger display"
@@ -422,13 +438,12 @@ config WM8326_VBAT_LOW_DETECTION
 config TWL60xx_VBAT_LOW_DETECTION
 	tristate "Support for twl60xx low battery detection."
 	default n
-
-config CHARGER_SMB347
-	tristate "Summit Microelectronics SMB347 Battery Charger"
-	depends on I2C
-	select REGMAP_I2C
+	
+config POWER_RT5025
+	bool "RT5025 Pmic Chip Power Driver"
+	depends on MFD_RT5025
+	default n
 	help
-	  Say Y to include support for Summit Microelectronics SMB347
-	  Battery Charger.
+	  Enable RT5025 Power/Gauge part driver.
 
 endif # POWER_SUPPLY

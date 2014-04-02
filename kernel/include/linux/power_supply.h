@@ -146,8 +146,7 @@ struct power_supply {
 
 	char **supplied_to;
 	size_t num_supplicants;
-
-#ifdef CONFIG_POWER_ON_CHARGER_DISPLAY
+	#ifdef CONFIG_POWER_ON_CHARGER_DISPLAY
 	struct list_head rk_psy_node;
 #endif
 

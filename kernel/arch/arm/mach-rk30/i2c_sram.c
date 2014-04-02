@@ -144,7 +144,7 @@ void __sramfunc sram_i2c_init()
     writel_relaxed(data[2]| I2C_GRF_GPIO_IOMUX, RK30_GRF_BASE + GRF_GPIO_IOMUX);
 	
 	div = 0x1e;
-	divh = divl = 0xf;
+	divh = divl = 0xf;	
 	writel_relaxed(I2C_CLKDIV_VAL(divl, divh), SRAM_I2C_ADDRBASE + I2C_CLKDIV);
 	data[3]  = readl_relaxed(SRAM_I2C_ADDRBASE + I2C_CLKDIV);
 	

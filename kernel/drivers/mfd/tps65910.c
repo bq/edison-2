@@ -89,7 +89,7 @@ static int tps65910_i2c_write(struct tps65910 *tps65910, u8 reg,
 	//for(i=0;i<bytes;i++)
 	//printk("%s:reg=0x%x,value=0x%x\n",__func__,reg+i,msg[i+1]);
 	
-	ret = i2c_master_send(i2c, msg, bytes + 1);
+	ret = i2c_master_normal_send(i2c, msg, bytes + 1,TPS65910_SPEED);
 	if (ret < 0)
 		return ret;
 	if (ret != bytes + 1)
@@ -268,6 +268,12 @@ static int tps65910_i2c_probe(struct i2c_client *i2c,
 			      NULL, 0);
 	if (ret < 0)
 		goto err;
+
+	ret = tps65910_reg_read(tps65910,0x22);
+	if ((ret < 0) || (ret == 0xff)){
+		printk("The device is not tps65910\n");
+		goto err;
+	}
 	
 	g_tps65910 = tps65910;
 	

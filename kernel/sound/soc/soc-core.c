@@ -30,6 +30,7 @@
 #include <linux/bitops.h>
 #include <linux/debugfs.h>
 #include <linux/platform_device.h>
+#include <linux/ctype.h>
 #include <linux/slab.h>
 #include <sound/ac97_codec.h>
 #include <sound/core.h>
@@ -1317,7 +1318,7 @@ EXPORT_SYMBOL_GPL(snd_soc_resume);
 
 static struct snd_soc_dai_ops null_dai_ops = {
 };
-
+#define CODEC_NAME_CMP
 static int soc_bind_dai_link(struct snd_soc_card *card, int num)
 {
 	struct snd_soc_dai_link *dai_link = &card->dai_link[num];
@@ -1326,7 +1327,14 @@ static int soc_bind_dai_link(struct snd_soc_card *card, int num)
 	struct snd_soc_platform *platform;
 	struct snd_soc_dai *codec_dai, *cpu_dai;
 	const char *platform_name;
-
+#ifdef CODEC_NAME_CMP
+	char *p_codec_name;
+	char *p_dai_codec_name;
+	char tmp_codec_name[50];
+	char tmp_dai_codec_name[50];
+	p_codec_name = tmp_codec_name;
+	p_dai_codec_name = tmp_dai_codec_name;
+#endif	
 	if (rtd->complete)
 		return 1;
 	dev_dbg(card->dev, "binding %s at idx %d\n", dai_link->name, num);
@@ -1353,7 +1361,15 @@ find_codec:
 
 	/* no, then find CODEC from registered CODECs*/
 	list_for_each_entry(codec, &codec_list, list) {
-		if (!strcmp(codec->name, dai_link->codec_name)) {
+#ifdef CODEC_NAME_CMP
+		strcpy(p_codec_name,codec->name);
+		strcpy(p_dai_codec_name,dai_link->codec_name);		
+#endif		
+		if (!strcmp(codec->name, dai_link->codec_name) 
+#ifdef CODEC_NAME_CMP			
+		||	!strcmp(strsep(&p_codec_name,"."), strsep(&p_dai_codec_name,"."))
+#endif
+			) {
 			rtd->codec = codec;
 
 			/* CODEC found, so find CODEC DAI from registered DAIs from this CODEC*/
@@ -1961,9 +1977,20 @@ static void snd_soc_instantiate_card(struct snd_soc_card *card)
 		 "%s", card->name);
 	snprintf(card->snd_card->longname, sizeof(card->snd_card->longname),
 		 "%s", card->long_name ? card->long_name : card->name);
-	if (card->driver_name)
-		strlcpy(card->snd_card->driver, card->driver_name,
-			sizeof(card->snd_card->driver));
+	snprintf(card->snd_card->driver, sizeof(card->snd_card->driver),
+		 "%s", card->driver_name ? card->driver_name : card->name);
+	for (i = 0; i < ARRAY_SIZE(card->snd_card->driver); i++) {
+		switch (card->snd_card->driver[i]) {
+		case '_':
+		case '-':
+		case '\0':
+			break;
+		default:
+			if (!isalnum(card->snd_card->driver[i]))
+				card->snd_card->driver[i] = '_';
+			break;
+		}
+	}
 
 	if (card->late_probe) {
 		ret = card->late_probe(card);

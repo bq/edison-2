@@ -280,6 +280,8 @@ int clk_set_rate_nolock(struct clk *clk, unsigned long rate)
 		__propagate_rate(clk);
 	}
 
+	clk->last_set_rate = rate;
+
 	if (clk->notifier_count)
 		clk_notify(clk, ret ? CLK_ABORT_RATE_CHANGE : CLK_POST_RATE_CHANGE, old_rate, clk->rate);
 
@@ -322,12 +324,6 @@ int clk_set_parent_nolock(struct clk *clk, struct clk *parent)
 	return ret;
 }
 /**********************************dvfs****************************************************/
-
-struct clk_node *clk_get_dvfs_info(struct clk *clk)
-{
-    return clk->dvfs_info;
-}
-
 int clk_set_rate_locked(struct clk * clk,unsigned long rate)
 {
 	int ret;
@@ -342,8 +338,18 @@ void clk_register_dvfs(struct clk_node *dvfs_clk, struct clk *clk)
 {
     clk->dvfs_info = dvfs_clk;
 }
-
-
+int clk_set_enable_locked(struct clk * clk,int on)
+{
+	int ret=0;
+	LOCK();
+	if(on)
+		ret=clk_enable_nolock(clk);
+	else	
+		clk_disable_nolock(clk);
+	UNLOCK();
+	return ret;
+}
+EXPORT_SYMBOL(clk_set_enable_locked);
 /*-------------------------------------------------------------------------
  * Optional clock functions defined in include/linux/clk.h
  *-------------------------------------------------------------------------*/
@@ -402,8 +408,8 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 	}
 	if (rate == clk->rate)
 		return 0;
-	if (clk->dvfs_info!=NULL&&is_support_dvfs(clk->dvfs_info))
-		return dvfs_set_rate(clk, rate);
+	if (dvfs_support_clk_set_rate(clk->dvfs_info)==true)
+		return dvfs_vd_clk_set_rate(clk, rate);
 
 	LOCK();
 	ret = clk_set_rate_nolock(clk, rate);
@@ -488,6 +494,10 @@ void clk_disable(struct clk *clk)
 {
 	if (clk == NULL || IS_ERR(clk))
 		return;
+	if (dvfs_support_clk_disable(clk->dvfs_info) == true) {
+		dvfs_vd_clk_disable(clk, 0);
+		return;
+	}
 
 	LOCK();
 	clk_disable_nolock(clk);
@@ -509,6 +519,8 @@ int  clk_enable(struct clk *clk)
 
 	if (clk == NULL || IS_ERR(clk))
 		return -EINVAL;
+	if (dvfs_support_clk_disable(clk->dvfs_info)==true)
+		return dvfs_vd_clk_disable(clk, 1);
 
 	LOCK();
 	ret = clk_enable_nolock(clk);
@@ -700,12 +712,14 @@ cnu_out:
 }
 EXPORT_SYMBOL(clk_notifier_unregister);
 
+#ifdef CONFIG_PROC_FS
 static struct clk_dump_ops *dump_def_ops;
 
 void clk_register_dump_ops(struct clk_dump_ops *ops)
 {
 	dump_def_ops=ops;
 }
+#endif
 
 #ifdef CONFIG_RK_CLOCK_PROC
 static int proc_clk_show(struct seq_file *s, void *v)
@@ -746,10 +760,32 @@ static const struct file_operations proc_clk_fops = {
 
 static int __init clk_proc_init(void)
 {
-	proc_create("clocks", 0, NULL, &proc_clk_fops);
+	proc_create("clocks", S_IFREG | S_IRUSR | S_IRGRP, NULL, &proc_clk_fops);
 	return 0;
 
 }
 late_initcall(clk_proc_init);
 #endif /* CONFIG_RK_CLOCK_PROC */
 
+static int clk_panic(struct notifier_block *this, unsigned long ev, void *ptr)
+{
+#ifdef RK30_CRU_BASE
+#define CRU_BASE RK30_CRU_BASE
+#elif defined(RK2928_CRU_BASE)
+#define CRU_BASE RK2928_CRU_BASE
+#endif
+#ifdef CRU_BASE
+	print_hex_dump(KERN_WARNING, "", DUMP_PREFIX_ADDRESS, 16, 4, CRU_BASE, 0x150, false);
+#endif
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block clk_panic_block = {
+	.notifier_call = clk_panic,
+};
+
+static int __init clk_panic_init(void)
+{
+	return atomic_notifier_chain_register(&panic_notifier_list, &clk_panic_block);
+}
+pure_initcall(clk_panic_init);

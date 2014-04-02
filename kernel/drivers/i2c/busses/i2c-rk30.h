@@ -22,6 +22,7 @@
 #include <linux/miscdevice.h>
 #include <mach/board.h>
 #include <mach/iomux.h>
+#include <mach/gpio.h>
 #include <asm/irq.h>
 
 #if 0
@@ -30,6 +31,8 @@
 #else
 #define i2c_dbg(dev, format, arg...)
 #endif
+
+#define I2C_CHECK_IDLE
 
 #define i2c_writel                 writel_relaxed
 #define i2c_readl                  readl_relaxed
@@ -44,8 +47,12 @@
 
 #define rk30_ceil(x, y) \
 	({ unsigned long __x = (x), __y = (y); (__x + __y - 1) / __y; })
-
+#if defined(CONFIG_ARCH_RK30) || defined(CONFIG_ARCH_RK3188)
 #define GRF_I2C_CON_BASE            (RK30_GRF_BASE + GRF_SOC_CON1)
+#endif
+#ifdef CONFIG_ARCH_RK2928
+#define GRF_I2C_CON_BASE            (RK2928_GRF_BASE + GRF_SOC_CON1)
+#endif
 #define I2C_ADAP_SEL_BIT(nr)        ((nr) + 11)
 #define I2C_ADAP_SEL_MASK(nr)        ((nr) + 27)
 enum rk30_i2c_state {
@@ -92,6 +99,8 @@ struct rk30_i2c {
         unsigned int        mode;
         unsigned int        count;
 
+	int sda_mode, scl_mode;
+
         struct wake_lock    idlelock[5];
         int is_div_from_arm[5];
 
@@ -101,7 +110,7 @@ struct rk30_i2c {
 
         void (*i2c_init_hw)(struct rk30_i2c *, unsigned long scl_rate);
         void (*i2c_set_clk)(struct rk30_i2c *, unsigned long);
-        int (*check_idle)(void);
+        int (*check_idle)(int);
         irqreturn_t (*i2c_irq)(int, void *);
 };
 void i2c_adap_sel(struct rk30_i2c *i2c, int nr, int adap_type);

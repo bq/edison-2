@@ -29,14 +29,14 @@
 
 #define EMPTY_ADVALUE					950
 #define DRIFT_ADVALUE					70
-#define INVALID_ADVALUE 				10
+#define INVALID_ADVALUE 				-1
 #define EV_MENU					KEY_F1
 #ifdef CONFIG_HALL_KEY
 extern int lcd_mode;
 #endif
 
 
-#if 1
+#if 0
 #define key_dbg(bdata, format, arg...)		\
 	dev_printk(KERN_INFO , &bdata->input->dev , format , ## arg)
 #else
@@ -102,8 +102,11 @@ static ssize_t rk29key_set(struct device *dev,
 	{
 		
 		p = strstr(buf,Arrary[i].keyArrary);
-		if(p==0) continue;
-		
+		if(p==0)
+              {
+                   dev_dbg(dev," rk29key_set p == 0 error ...............\n");
+                   continue;
+              }
 		start = strcspn(p,":");
 		
 		if(i<6)
@@ -184,7 +187,42 @@ static ssize_t key_set(struct device *dev,
 
 }
 
-static DEVICE_ATTR(key_set,0666, NULL, key_set);
+static ssize_t key_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct rk29_keys_platform_data *pdata = dev_get_platdata(dev);
+	int i;
+	int state;
+	struct rk29_keys_button *button;
+	unsigned int type = EV_KEY;
+
+	if (!input_dev)
+		return sprintf(buf, "%s\n", "error");
+
+	for (i = 0; i < pdata->nbuttons; i++) {
+		if (strcmp(pdata->buttons[i].desc, "play") == 0)
+			break;
+	}
+	if (i == pdata->nbuttons)
+		return sprintf(buf, "%s\n", "error");
+
+	button = &pdata->buttons[i];
+
+	if(button->gpio != INVALID_GPIO)
+		state = !!((gpio_get_value(button->gpio) ? 1 : 0) ^ button->active_low);
+	else
+		state = !!button->adc_state;
+	printk("key_set state:%d\n", state);
+	if(state) {
+		printk("wake report key presss again!!!\n");
+		input_event(input_dev, type, button->code, state);
+		input_sync(input_dev);
+		return sprintf(buf, "%s", "press");
+	} else {
+		return sprintf(buf, "%s", "release");
+	}
+}
+
+static DEVICE_ATTR(key_set,0666, key_show, key_set);
 void rk29_send_power_key(int state)
 {
 	if (!input_dev)
@@ -273,23 +311,39 @@ static void keys_timer(unsigned long _data)
 		state = !!((gpio_get_value(button->gpio) ? 1 : 0) ^ button->active_low);
 	else
 		state = !!button->adc_state;
+
+#ifdef CONFIG_HALL_KEY
+	key_dbg(bdata, "%s: state = %d, lcd_mode = %d\n", __func__, state, lcd_mode);
+#endif
 	if(bdata->state != state) {
 		bdata->state = state;
-		key_dbg(bdata, "%skey[%s]: report ev[%d] state[%d]\n", 
-			(button->gpio == INVALID_GPIO)?"ad":"io", button->desc, button->code, bdata->state);
-        #ifdef CONFIG_HALL_KEY
+
+#ifdef CONFIG_HALL_KEY
 		if(button->hall_key){
 			if(state == lcd_mode){
 				input_event(input, type, button->code, 1);
 				input_sync(input);
 				input_event(input, type, button->code, 0);
 				input_sync(input);
+				key_dbg(bdata, "%s:report hall key\n", __func__);
+			}else{
+				key_dbg(bdata, "%s:ignore hall key\n", __func__);
 			}
 		}else
-		#endif
-		input_event(input, type, button->code, bdata->state);
-		input_sync(input);
+#endif
+		{
+			key_dbg(bdata, "%skey[%s]: report ev[%d] state[%d]\n",
+				(button->gpio == INVALID_GPIO)?"ad":"io", button->desc, button->code, bdata->state);
+			input_event(input, type, button->code, bdata->state);
+			input_sync(input);
+		}
 	}
+#ifdef CONFIG_HALL_KEY
+	if((button->hall_key) && (state == 1))
+		mod_timer(&bdata->timer,
+			jiffies + msecs_to_jiffies(1000));
+	else
+#endif
 	if(state)
 		mod_timer(&bdata->timer,
 			jiffies + msecs_to_jiffies(DEFAULT_DEBOUNCE_INTERVAL));
@@ -307,18 +361,16 @@ static irqreturn_t keys_isr(int irq, void *dev_id)
 		bdata->state = 1;
 		key_dbg(bdata, "wakeup: %skey[%s]: report ev[%d] state[%d]\n", 
 			(button->gpio == INVALID_GPIO)?"ad":"io", button->desc, button->code, bdata->state);
-		input_event(input, type, button->code, 1);
+		input_event(input, type, button->code, bdata->state);
 		input_sync(input);
-		//input_event(input, type, button->code, 0);
-		//input_sync(input);
-	        //return IRQ_HANDLED;
         }
 	bdata->long_press_count = 0;
 	mod_timer(&bdata->timer,
 				jiffies + msecs_to_jiffies(DEFAULT_DEBOUNCE_INTERVAL));
 	return IRQ_HANDLED;
 }
-static void callback(struct adc_client *client, void *client_param, int result)
+
+static void keys_adc_callback(struct adc_client *client, void *client_param, int result)
 {
 	struct rk29_keys_drvdata *ddata = (struct rk29_keys_drvdata *)client_param;
 	int i;
@@ -343,7 +395,8 @@ static void callback(struct adc_client *client, void *client_param, int result)
 	}
 	return;
 }
-static void adc_timer(unsigned long _data)
+
+static void keys_adc_timer(unsigned long _data)
 {
 	struct rk29_keys_drvdata *ddata = (struct rk29_keys_drvdata *)_data;
 
@@ -351,6 +404,7 @@ static void adc_timer(unsigned long _data)
 		adc_async_read(ddata->client);
 	mod_timer(&ddata->timer, jiffies + msecs_to_jiffies(ADC_SAMPLE_TIME));
 }
+
 static ssize_t adc_value_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct rk29_keys_drvdata *ddata = dev_get_drvdata(dev);
@@ -397,31 +451,43 @@ static int __devinit keys_probe(struct platform_device *pdev)
 		__set_bit(EV_REP, input->evbit);
 	ddata->nbuttons = pdata->nbuttons;
 	ddata->input = input;
-	if(pdata->chn >= 0) {
-		ddata->client = adc_register(pdata->chn, callback, (void *)ddata);
-		if(!ddata->client) {
-			error = -EINVAL;
-			goto fail1;
-		}
-		setup_timer(&ddata->timer,
-			    	adc_timer, (unsigned long)ddata);
-		mod_timer(&ddata->timer, jiffies + msecs_to_jiffies(100));
-	}
+
 	for (i = 0; i < pdata->nbuttons; i++) {
 		struct rk29_keys_button *button = &pdata->buttons[i];
 		struct rk29_button_data *bdata = &ddata->data[i];
-		int irq;
-		unsigned int type = EV_KEY;
 
 		bdata->input = input;
 		bdata->button = button;
                 bdata->ddata = ddata;
-		if(button->code_long_press)
+
+		if (button->code_long_press)
 			setup_timer(&bdata->timer,
 			    	keys_long_press_timer, (unsigned long)bdata);
-		else if(button->code)
+		else if (button->code)
 			setup_timer(&bdata->timer,
 			    	keys_timer, (unsigned long)bdata);
+
+		if (button->wakeup)
+			wakeup = 1;
+
+		input_set_capability(input, EV_KEY, button->code);
+	};
+
+	if (pdata->chn >= 0) {
+		setup_timer(&ddata->timer, keys_adc_timer, (unsigned long)ddata);
+		ddata->client = adc_register(pdata->chn, keys_adc_callback, (void *)ddata);
+		if (!ddata->client) {
+			error = -EINVAL;
+			goto fail1;
+		}
+		mod_timer(&ddata->timer, jiffies + msecs_to_jiffies(100));
+	}
+
+	for (i = 0; i < pdata->nbuttons; i++) {
+		struct rk29_keys_button *button = &pdata->buttons[i];
+		struct rk29_button_data *bdata = &ddata->data[i];
+		int irq;
+
 		if(button->gpio != INVALID_GPIO) {
 			error = gpio_request(button->gpio, button->desc ?: "keys");
 			if (error < 0) {
@@ -460,10 +526,6 @@ static int __devinit keys_probe(struct platform_device *pdev)
 				goto fail2;
 			}
 		}
-		if (button->wakeup)
-			wakeup = 1;
-
-		input_set_capability(input, type, button->code);
 	}
 
 	input_set_capability(input, EV_KEY, KEY_WAKEUP);
@@ -486,6 +548,7 @@ static int __devinit keys_probe(struct platform_device *pdev)
 	{
 		pr_err("failed to create key file error: %d\n", error);
 	}
+
 
 	input_dev = input;
 	return error;
