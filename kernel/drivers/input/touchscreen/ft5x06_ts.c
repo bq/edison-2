@@ -448,6 +448,10 @@ static unsigned char CTPM_FW3[]=
   #include "ft_app-19.h"
 };
 
+static unsigned char CTPM_FW4[]=
+{
+  #include "ft_app-59.h"
+};
 
 E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth)
 {
@@ -463,7 +467,7 @@ E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth)
     FTS_BYTE bt_ecc;
     int      i_ret;
     
-    #if  defined(CONFIG_MALATA_D8009)
+    #if  (defined(CONFIG_MALATA_D8009)||defined(CONFIG_MALATA_D7022))
     unsigned char au_delay_timings[11] = {30, 33, 36, 39, 42, 45, 27, 24,21,18,15};
     #else
     unsigned char au_delay_timings[11] = {10, 11, 12, 13, 14, 15, 9, 8, 7,6,5};
@@ -504,7 +508,7 @@ E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth)
     byte_read(reg_val,2);
     /* if IC is ft5216 , id is 0x79 0x07 ; if ic is ft5606 ,ic is 0x79 0x06*/
     /* if IC if ft5406 , id is 0x79 0x03*/
-  #if  defined(CONFIG_MALATA_D8009)
+  #if  (defined(CONFIG_MALATA_D8009)||defined(CONFIG_MALATA_D7022))
     if (reg_val[0] == 0x79 && reg_val[1] == 0x03)
   #else
     if (reg_val[0] == 0x79 && reg_val[1] == 0x06)
@@ -765,6 +769,30 @@ int fts_ctpm_fw_upgrade_with_i_file3(void)
    return i_ret;
 }
 
+int fts_ctpm_fw_upgrade_with_i_file4(void)
+{
+   FTS_BYTE*     pbt_buf = FTS_NULL;
+   int i_ret;
+
+    //=========FW upgrade========================*/
+   pbt_buf = CTPM_FW4;
+   /*call the upgrade function*/
+   i_ret =  fts_ctpm_fw_upgrade(pbt_buf,sizeof(CTPM_FW4));
+   if (i_ret != 0)
+   {
+       //error handling ...
+       //TBD
+       printk("TP upgrade fail.\n");
+   }
+   else
+   {
+	fts_ctpm_auto_clb();
+   }
+
+   return i_ret;
+}
+
+
 unsigned char fts_ctpm_get_upg_ver(void)
 {
     unsigned int ui_sz;
@@ -814,6 +842,7 @@ static int ft5x0x_read_data(void)
 
 	u8 buf[62] = {0};
 	int ret = -1;
+	unsigned char threshold_value;
 
 #ifdef CONFIG_FT5X0X_MULTITOUCH
   
@@ -935,6 +964,37 @@ static int ft5x0x_read_data(void)
 	dev_dbg(&this_client->dev, "%s: 1:%d %d 2:%d %d \n", __func__,
 		event->x1, event->y1, event->x2, event->y2);
 	//printk("%d (%d, %d), (%d, %d)\n", event->touch_point, event->x1, event->y1, event->x2, event->y2);
+
+#if  defined(CONFIG_MALATA_D7022)
+     ret = ft5x0x_read_reg(FT5X0X_REG_THGROUP, &threshold_value);
+     if ( ret < 0)
+     {
+     	  return 0;
+     }
+     else
+     {
+     	  /* DC IN status */
+          if(0 == gpio_get_value(RK30_PIN0_PA7))
+          {
+          	/* change sensitivity , threshold value is 40 x 4 , peak value is 120*/
+          	if(threshold_value != 40)
+          	{
+          	   ft5x0x_write_reg(FT5X0X_REG_THGROUP,40);
+          	   ft5x0x_write_reg(FT5X0X_REG_THPEAK,120); 	
+        	}		
+          	
+          }  
+          else  /*Not DC in */   
+          {
+          	/* change sensitivity , threshold value is 22 x 4 , peak value is 70 */
+                if(threshold_value != 22)
+          	{
+          	    ft5x0x_write_reg(FT5X0X_REG_THGROUP,22);	
+          	    ft5x0x_write_reg(FT5X0X_REG_THPEAK,70); 
+        	}		
+          }			
+     }	
+#endif
 
     return 0;
 }
@@ -1190,6 +1250,7 @@ static void ft5x0x_report_value(void)
 	dev_dbg(&this_client->dev, "%s: 1:%d %d 2:%d %d \n", __func__,
 		event->x1, event->y1, event->x2, event->y2);
 }	/*end ft5x0x_report_value*/
+
 /***********************************************************************************************
 Name	:
 
@@ -1389,6 +1450,18 @@ ft5x0x_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
               }	
               
           #endif
+          
+           #if  defined(CONFIG_MALATA_D7022)
+              if(( uc_reg_value < 0x59) && ( uc_reg_value > 0x50))
+              {
+        	  fts_ctpm_fw_upgrade_with_i_file4();
+              }	
+              if( uc_reg_value == 0xa6 )
+              {
+                   fts_ctpm_fw_upgrade_with_i_file4();	
+              }	 
+              
+           #endif
 	    
 	uc_reg_value = ft5x0x_read_fw_ver();
 	printk("[FST] Firmware version = 0x%x\n", uc_reg_value);

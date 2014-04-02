@@ -122,7 +122,7 @@ struct bq24196_device_info {
 	struct delayed_work work;
 	struct i2c_client	*client;
 	unsigned int interval;
-	struct timer_list timer;
+	//struct timer_list timer;
 };
 
 struct bq24196_platform_data {		

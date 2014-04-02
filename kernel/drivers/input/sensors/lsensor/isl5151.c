@@ -183,33 +183,121 @@ static int sensor_init(struct i2c_client *client)
 
 static void light_report_value(struct input_dev *input, int data)
 {
-	unsigned char index = 0;
+	static unsigned char index = 0;
+	static int d0=0,d1=0,d2=0,d3=0,d4=0,d5=0,d6=0,d7=0;
 	//printk("yemk:light_report_value data %d\n",data);
-	if(data <= 22){
-		index = 0;goto report;
+		if(data <= 79){
+		d0++;
+        if(d0==2){
+		 d0=0;
+		 index = 0;goto report;
+         }
+		d1=0;
+		d2=0;
+		d3=0;
+		d4=0;
+		d5=0;
+		d6=0;
+		d7=0;
 	}
-	else if(data <= 32){
+	else if(data <= 109){
+		d1++;
+		if(d1==2){
+		d1=0;
 		index = 1;goto report;
+		}
+		d0=0;
+		d2=0;
+		d3=0;
+		d4=0;
+		d5=0;
+		d6=0;
+		d7=0;
 	}
-	else if(data <= 47){
+	else if(data <= 139){
+		d2++;
+		if(d2==2){
+		d2=0;
 		index = 2;goto report;
+		}
+		d0=0;
+		d1=0;
+		d3=0;
+		d4=0;
+		d5=0;
+		d6=0;
+		d7=0;
 	}
-	else if(data <= 67){
+	else if(data <= 179){
+		d3++;
+		if(d3==2){
+		d3=0;
 		index = 3;goto report;
+		}
+		d0=0;
+		d1=0;
+		d2=0;
+		d4=0;
+		d5=0;
+		d6=0;
+		d7=0;
 	}
-	else if(data <= 87){
+	else if(data <= 359){
+		d4++;
+		if(d4==2){
+		d4=0;
 		index = 4;goto report;
+		}
+		d0=0;
+		d1=0;
+		d2=0;
+		d3=0;
+		d5=0;
+		d6=0;
+		d7=0;
 	}
-	else if(data <= 180){
+	else if(data <= 429){
+		d5++;
+		if(d5==2){
+		d5=0;
 		index = 5;goto report;
+		}
+		d0=0;
+		d1=0;
+		d2=0;
+		d3=0;
+		d4=0;
+		d6=0;
+		d7=0;
 	}
-	else if(data <= 	325){
+	else if(data <= 510){
+		d6++;
+		if(d6==2){
+		d6=0;
 		index = 6;goto report;
+		}
+		d0=0;
+		d1=0;
+		d2=0;
+		d3=0;
+		d4=0;
+		d5=0;
+		d7=0;
 	}
 	else{
+		d7++;
+		if(d7==2){
+		d7=0;
 		index = 7;goto report;
+		}
+		d0=0;
+		d1=0;
+		d2=0;
+		d3=0;
+		d4=0;
+		d5=0;
+		d6=0;
 	}
-
 report:
 	DBG("ISL5151 report data=%d,index = %d\n",data,index);
 	input_report_abs(input, ABS_MISC, index);
@@ -224,13 +312,23 @@ static int sensor_report_value(struct i2c_client *client)
 	int result = 0;
 	char msb = 0, lsb = 0;
 	bool status;
+	static int i = 0;
+	static int res_flag = 0;
 	
 	lsb = sensor_read_reg(sensor->client, ISL5151_ADDR_DATA_LSB);
 	msb = sensor_read_reg(sensor->client, ISL5151_ADDR_DATA_MSB);
 	result = ((msb << 1) | ((lsb  >> 7 ) & 0x01)) & 0xffff;
-	
-	DBG("%s:result=%d, lsb:%d, msb:%d\n",__func__,result, lsb, msb);
-	light_report_value(sensor->input_dev, result);
+
+	res_flag=res_flag+result;
+	i++;
+	//printk("yemk res_flag=%d,i=%d,result=%d, lsb:%d, msb:%d\n",res_flag,i,result, lsb, msb);
+
+	if(i==2){
+		result=res_flag/2;
+		i=0;
+		res_flag=0;
+		light_report_value(sensor->input_dev, result);
+	}
 
 	return result;
 }

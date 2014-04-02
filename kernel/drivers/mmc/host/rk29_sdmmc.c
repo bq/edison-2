@@ -3307,7 +3307,7 @@ static irqreturn_t rk29_sdmmc_interrupt(int irq, void *dev_id)
     	        clear_bit(RK29_SDMMC_CARD_PRESENT, &host->flags);
     	        host->mmc->re_initialized_flags = 0;
 
-    	        mmc_detect_change(host->mmc, 200);
+				mmc_detect_change(host->mmc, 0);
     	    }
 
     	}
@@ -3465,7 +3465,7 @@ static void rk29_sdmmc_detect_change(unsigned long data)
         host->mmc->re_initialized_flags =1;
     }
     
-	mmc_detect_change(host->mmc, 200);
+	mmc_detect_change(host->mmc, 0);
 
 }
 
@@ -3865,8 +3865,8 @@ static int rk29_sdmmc_probe(struct platform_device *pdev)
     }
 
 #endif
-	
-#if defined(CONFIG_RK29_SDIO_IRQ_FROM_GPIO)
+
+#if defined(CONFIG_RK29_SDIO_IRQ_FROM_GPIO) && defined(CONFIG_WIFI_IB_mODE)
     if(RK29_CTRL_SDIO1_ID == host->pdev->id)
     {
         gpio_request(host->sdio_INT_gpio, "sdio_interrupt");
@@ -3901,7 +3901,7 @@ static int rk29_sdmmc_probe(struct platform_device *pdev)
     }
 
 #endif
-    
+
     /* setup sdmmc1 wifi card detect change */
     if (pdata->register_status_notify) {
         pdata->register_status_notify(rk29_sdmmc1_status_notify_cb, host);

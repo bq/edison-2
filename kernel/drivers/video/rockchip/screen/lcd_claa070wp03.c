@@ -6,7 +6,7 @@
 #define SCREEN_TYPE		SCREEN_RGB
 #define LVDS_FORMAT		LVDS_8BIT_1
 #define OUT_FACE		OUT_D888_P666
-#define DCLK			71000000
+#define DCLK			75000000
 #define LCDC_ACLK       300000000     //29 lcdc axi DMA ÆµÂÊ
 
 /* Timing */

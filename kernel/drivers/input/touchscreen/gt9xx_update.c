@@ -21,12 +21,16 @@
 
 #include <linux/gt9xx.h>
 
+#if  GTP_HEADER_FW_UPDATE
+#include "gt9xx_firmware_911_v1015.h"
+#endif
+
 #define GUP_REG_HW_INFO             0x4220
 #define GUP_REG_FW_MSG              0x41E4
 #define GUP_REG_PID_VID             0x8140
 
 #define GUP_SEARCH_FILE_TIMES       50
-#define UPDATE_FILE_PATH_2          "/data/goodix/_goodix_update_.bin"
+#define UPDATE_FILE_PATH_2          "/system/vendor/firmware/_goodix_update_.bin"
 #define UPDATE_FILE_PATH_1          "/sdcard/goodix/_goodix_update_.bin"
 
 #define FW_HEAD_LENGTH               14
@@ -308,6 +312,7 @@ static u8 gup_check_update_file(struct i2c_client *client, st_fw_head* fw_head, 
     int ret = 0;
     int i = 0;
     u8 buf[FW_HEAD_LENGTH];
+    s32 fw_checksum = 0;
 
     if (path)
     {
@@ -322,13 +327,48 @@ static u8 gup_check_update_file(struct i2c_client *client, st_fw_head* fw_head, 
     }
     else
     {
+      #if   GTP_HEADER_FW_UPDATE
+         memcpy(fw_head, &gtp_default_FW[0], FW_HEAD_LENGTH);
+         fw_checksum = 0;
+         
+        for(i=0; i<FW_SECTION_LENGTH*4+FW_DSP_ISP_LENGTH+FW_DSP_LENGTH+FW_BOOT_LENGTH; i+=2)
+        {
+            u16 temp;
+            memcpy(buf, &gtp_default_FW[FW_HEAD_LENGTH + i], 2);
+            //GTP_DEBUG("BUF[0]:%x", buf[0]);
+            temp = (buf[0]<<8) + buf[1];
+            fw_checksum += temp;
+        }
+        
+        GTP_DEBUG("firmware checksum:%x", fw_checksum&0xFFFF);
+        if(fw_checksum&0xFFFF)
+        {
+            GTP_ERROR("Illegal firmware file.");
+            return FAIL;
+        }
+        
+       ret = gup_enter_upadte_judge(fw_head);
+       if(SUCCESS == ret)
+       {
+            GTP_INFO("Check *.bin file success.");
+           return SUCCESS;
+       }
+       else
+       {
+           GTP_INFO("Check *.bin file failed.");
+           return  FAIL;
+	}
+           
+      #endif	
+    	
+    	
         //Begin to search update file
         for (i = 0; i < GUP_SEARCH_FILE_TIMES; i++)
         {
-            update_msg.file = filp_open(UPDATE_FILE_PATH_1, O_RDWR, 0444);
+            update_msg.file = filp_open(UPDATE_FILE_PATH_1, O_RDONLY, 0444);
             if (IS_ERR(update_msg.file))
             {
-                update_msg.file = filp_open(UPDATE_FILE_PATH_2, O_RDWR, 0666);
+                update_msg.file = filp_open(UPDATE_FILE_PATH_2, O_RDONLY, 0666);
                 if (IS_ERR(update_msg.file))
                 {
                     GTP_DEBUG("%3d:Searching file...", i);
@@ -474,6 +514,13 @@ static u8 gup_burn_proc(struct i2c_client *client, u8 *burn_buf, u16 start_addr,
 static u8 gup_load_section_file(u8* buf, u16 offset, u16 length)
 {
     s32 ret = 0;
+    
+    #if GTP_HEADER_FW_UPDATE
+ 
+        memcpy(buf, &gtp_default_FW[FW_HEAD_LENGTH + offset], length);
+        return SUCCESS;
+   
+    #endif
     
     if(update_msg.file == NULL)
     {

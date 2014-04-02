@@ -218,7 +218,7 @@ static ssize_t key_show(struct device *dev, struct device_attribute *attr, char 
 	}
 }
 
-static DEVICE_ATTR(key_set,0666, key_show, key_set);
+static DEVICE_ATTR(key_set,0664, key_show, key_set);
 void rk29_send_power_key(int state)
 {
 	if (!input_dev)

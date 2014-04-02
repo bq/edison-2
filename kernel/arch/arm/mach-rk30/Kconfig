@@ -166,6 +166,9 @@ config MALATA_D1013
 config MALATA_D1014
 	bool "Malata D1014 Project"
 
+config MALATA_D1015
+	bool "Malata D1015 Project"
+
 config MALATA_D8009
 	bool "Malata D8009 Project"
 

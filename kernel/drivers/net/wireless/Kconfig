@@ -140,6 +140,18 @@ choice
 		bool "AP6210"
 		depends on RKWIFI && WLAN_80211
 
+	config AP6234
+		bool "AP6234"
+		depends on RKWIFI && WLAN_80211
+
+	config AP6335
+		bool "AP6335"
+		depends on RKWIFI && WLAN_80211
+
+	config AP6441
+		bool "AP6441"
+		depends on RKWIFI && WLAN_80211
+
 	config AP6330
 		bool "AP6330"
 		depends on RKWIFI && WLAN_80211
@@ -173,5 +185,19 @@ choice
 
 endchoice
 
+choice
+	depends on RKWIFI && WLAN_80211
+	prompt "Select wifi mode"
+	default WIFI_OOB_MODE
+
+	config WIFI_OOB_MODE
+		bool "Out of band mode"
+		depends on RKWIFI && WLAN_80211
+
+	config WIFI_IB_MODE
+		bool "In band mode"
+		depends on RKWIFI && WLAN_80211
+
+endchoice
 endif
 

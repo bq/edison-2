@@ -61,11 +61,12 @@ static struct rt5616_init_reg init_list[] = {
 	{RT5616_HPO_MIXER	, 0x4000}, //HPVOL -> HPO
 #if defined(CONFIG_MALATA_D7005) || defined(CONFIG_MALATA_D7803_Q7)
 	{RT5616_HP_VOL		, 0x8d8d}, //unmute HPVOL
-#elif defined(CONFIG_MALATA_D1014)
-	{RT5616_HP_VOL		, 0x8c8c}, //unmute HPVOL
+#elif defined(CONFIG_MALATA_D8009) || defined(CONFIG_MALATA_D7022) || defined(CONFIG_MALATA_D1014)
+	{RT5616_HP_VOL		, 0x8e8e}, //unmute HPVOL
 #else
 	{RT5616_HP_VOL		, 0x8f8f}, //unmute HPVOL
 #endif
+
 #if defined(CONFIG_MALATA_D1014)
 	{RT5616_DAC1_DIG_VOL    , 0xadad},//yemk add
 #else
@@ -89,6 +90,8 @@ static struct rt5616_init_reg init_list[] = {
 	#else
 	{RT5616_ADC_DIG_VOL	, 0xbfbf},
 	#endif
+#elif defined(CONFIG_MALATA_D7022)
+	{RT5616_ADC_DIG_VOL	, 0xefef},
 #else
 	{RT5616_ADC_DIG_VOL	, 0xcfcf}, //mute adc for pop noise
 #endif
@@ -98,6 +101,8 @@ static struct rt5616_init_reg init_list[] = {
 	{RT5616_IN1_IN2		, 0x3740}, //20db
 #elif defined(CONFIG_MALATA_D1013)
 	{RT5616_IN1_IN2		, 0x3540},
+#elif defined(CONFIG_MALATA_D7022)
+	{RT5616_IN1_IN2 	, 0x3540},
 #else
 	{RT5616_IN1_IN2		, 0x3340}, //20db
 #endif
@@ -139,13 +144,13 @@ static const u16 rt5616_reg[RT5616_DEVICE_ID + 1] = {
 #if defined(CONFIG_MALATA_D7005)	//Modfied by EvanZeng for the volume of speaker is very high
 	[RT5616_LOUT_CTRL1] = 0x9292,
 #elif defined(CONFIG_MALATA_D8009)//0.7W
-	[RT5616_LOUT_CTRL1] = 0x9393,
+	[RT5616_LOUT_CTRL1] = 0x9595,
 #elif defined(CONFIG_MALATA_C1017)
 	[RT5616_LOUT_CTRL1] = 0x8787,
 #elif defined(CONFIG_MALATA_D1014)
 	[RT5616_LOUT_CTRL1] = 0x8989,
 #elif defined(CONFIG_MALATA_D7022)// 1W 
-	[RT5616_LOUT_CTRL1] = 0x9595,
+	[RT5616_LOUT_CTRL1] = 0x8A8A,
 #elif defined(CONFIG_MALATA_D7803)
 	#if defined(CONFIG_MALATA_D7806)
 	[RT5616_LOUT_CTRL1] = 0x8989,
@@ -155,7 +160,7 @@ static const u16 rt5616_reg[RT5616_DEVICE_ID + 1] = {
 #elif defined(CONFIG_MALATA_D8006)	//Modfied by SolinLin for the volume of speaker is very high
 	[RT5616_LOUT_CTRL1] = 0x9090,
 #elif defined(CONFIG_MALATA_D1013)
-	[RT5616_LOUT_CTRL1] = 0x8787,
+	[RT5616_LOUT_CTRL1] = 0x8686,
 #else
    [RT5616_LOUT_CTRL1] = 0x8888,  //0xc8c8
 #endif //Modfied by EvanZeng End
@@ -719,22 +724,8 @@ static void spk_ctrl_fun(int status)
 	{
 		//printk("--------%s----------status = %d\n",__FUNCTION__,status);
 		if(status){
-#if defined(CONFIG_MALATA_D7022)
-			//set audio pa mode to mode 4
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
-#elif defined(CONFIG_MALATA_D7005) || defined(CONFIG_MALATA_D1013)
+
+#if defined(CONFIG_MALATA_D7005) || defined(CONFIG_MALATA_D1013)
 			//set audio pa mode to mode 3, 0.8w , xmtzqh
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
 			udelay(8);
@@ -1883,23 +1874,8 @@ void codec_set_spk(bool on)
 	rt5616_codec->hdmi_ndet = on;
 	if(on) {
 		if (rt5616_codec->last_hp_jd_sts != HP_JD_INSERT){
-#if defined(CONFIG_MALATA_D7022)
-			//set audio pa mode to mode 4
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);
-			udelay(2);
-			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
 
-#elif defined(CONFIG_MALATA_D7005) || defined(CONFIG_MALATA_D1013)
+#if defined(CONFIG_MALATA_D7005) || defined(CONFIG_MALATA_D1013)
 			//set audio pa mode to mode 3, 0.8w, xmtzqh
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
 			udelay(8);
@@ -1911,7 +1887,7 @@ void codec_set_spk(bool on)
 			udelay(8);
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
 #elif defined(CONFIG_MALATA_D1012)
-			//set audio pa mode to mode 3, 1.0w , xmtzqh
+			//set audio pa mode to mode 2, 1.0w , xmtzqh
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
 			udelay(8);
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);
@@ -1919,7 +1895,7 @@ void codec_set_spk(bool on)
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
 			printk("--------%s----------delay mode2\n",__FUNCTION__);
 #elif defined(CONFIG_MALATA_D8009) || defined(CONFIG_MALATA_D7806)
-			//set audio pa mode to mode 3, 1.0w , xmtzqh
+			//set audio pa mode to mode 2, 1.0w , xmtzqh
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_HIGH);
 			udelay(2);
 			gpio_set_value(rt5616_codec->spk_ctrl_io, GPIO_LOW);

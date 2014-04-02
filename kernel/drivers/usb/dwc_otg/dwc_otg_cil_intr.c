@@ -480,6 +480,9 @@ int32_t dwc_otg_handle_wakeup_detected_intr( dwc_otg_core_if_t *_core_if )
 {
 	gintsts_data_t gintsts;
 
+	dwc_otg_hcd_t *dwc_otg_hcd = _core_if->otg_dev->hcd;
+	struct usb_hcd *hcd = dwc_otg_hcd_to_hcd(dwc_otg_hcd);
+
 	DWC_DEBUGPL(DBG_ANY, "++Resume and Remote Wakeup Detected Interrupt++\n");
 
         if (dwc_otg_is_device_mode(_core_if) ) { 
@@ -531,6 +534,8 @@ int32_t dwc_otg_handle_wakeup_detected_intr( dwc_otg_core_if_t *_core_if )
                 hprt0.b.prtres = 0; /* Resume */
                 dwc_write_reg32(_core_if->host_if->hprt0, hprt0.d32);                
                 DWC_DEBUGPL(DBG_ANY,"Clear Resume: HPRT0=%0x\n", dwc_read_reg32(_core_if->host_if->hprt0));
+                dwc_otg_hcd->flags.b.port_suspend_change = 1;
+                usb_hcd_resume_root_hub(hcd);
         }        
 
 	/* Clear interrupt */

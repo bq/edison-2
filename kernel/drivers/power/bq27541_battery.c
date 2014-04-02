@@ -64,6 +64,8 @@ extern void rk30_bat_unregister(void);
 extern void bq24196_charge_disable(void);
 extern void bq24196_charge_en(void);
 extern int check_charge_ok;
+static struct kobject *bq27541_kobj;
+static int stop_charging;
 static int temp_val = 0;
 int charge_en_flags = 0;
 int update_temp_ok = 0;
@@ -441,11 +443,21 @@ static int bq27541_battery_status(struct bq27541_device_info *di,
 #endif
 #if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
 		if((1 == check_charge_ok) && (!strstr(saved_command_line,"charger"))){
+			if(1 == charge_en_flags)
+			{
+				if(status != POWER_SUPPLY_STATUS_DISCHARGING){
+					status = POWER_SUPPLY_STATUS_DISCHARGING;
+					stop_charging = 1;
+				}
+			}else{
+				stop_charging = 0;
+			}
+
 			if(1 == update_temp_ok){
-				if(1 == charge_en_flags)
-					status = POWER_SUPPLY_STATUS_NOT_CHARGING;
-				else
-					update_temp_ok = 0;
+                        	if(1 == charge_en_flags)
+                                        status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+                                else
+                                        update_temp_ok = 0; 
 			}
 		}
 #endif
@@ -717,6 +729,36 @@ static void battery_capacity_check(struct bq27541_device_info *di)
 	return;
 }
 
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+static ssize_t stop_charging_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", stop_charging);
+}
+
+static DEVICE_ATTR(stopcharging, 0644, stop_charging_show, NULL);
+static int bq27541_sysfs_init(void)
+{
+	int ret;
+	bq27541_kobj = kobject_create_and_add("bq27541_bat", NULL);
+	if (bq27541_kobj == NULL) {
+		printk("bq27541_sysfs_init: subsystem_register failed\n");
+		ret = -ENOMEM;
+		goto err;
+	}
+	ret = sysfs_create_file(bq27541_kobj, &dev_attr_stopcharging.attr);
+	if (ret) {
+		printk("bq27541_sysfs_init: sysfs_create_file failed\n");
+		goto err0;
+	}
+	return 0;
+err0:
+	kobject_del(bq27541_kobj);
+err:
+	return ret;
+}
+#endif
+
 static int bq27541_battery_probe(struct i2c_client *client,
 				 const struct i2c_device_id *id)
 {
@@ -741,7 +783,7 @@ static int bq27541_battery_probe(struct i2c_client *client,
 	di->bat.name = "battery";
 	di->client = client;
 	/* 1 seconds between monotor runs interval */
-	di->interval = msecs_to_jiffies(1 * 1000);
+	di->interval = msecs_to_jiffies(4 * 1000);
 	
 	di->bat_num = pdata->bat_num;
 	di->dc_check_pin = pdata->dc_check_pin;
@@ -781,6 +823,9 @@ static int bq27541_battery_probe(struct i2c_client *client,
 	dev_info(&client->dev, "support ver. %s enabled\n", DRIVER_VERSION);
 
 	battery_capacity_check(di);
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+	bq27541_sysfs_init();
+#endif
 
 	return 0;
 

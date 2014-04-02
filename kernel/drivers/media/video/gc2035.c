@@ -128,8 +128,7 @@ static struct reginfo sensor_init_data[] ={
 	{0xfa,0x00},
 	{0xf6,0x00},
 	{0xf7,0x15}, //pll enable
-	#if defined(CONFIG_MALATA_D7806) || defined(CONFIG_MALATA_D8009)||defined(CONFIG_MALATA_D1014) \
-		||defined(CONFIG_MALATA_D7022)
+	#if defined(CONFIG_MALATA_D7806)
 	{0xf8,0x84},
 	#else
 	{0xf8,0x85},
@@ -194,8 +193,7 @@ static struct reginfo sensor_init_data[] ={
 	#endif
 
 		
-#if defined(CONFIG_MALATA_D7806) || defined(CONFIG_MALATA_D8009)||defined(CONFIG_MALATA_D1014) \
-     ||defined(CONFIG_MALATA_D7022)
+#if defined(CONFIG_MALATA_D7806)
 	///banding for f8->0x84
 	{0xfe, 0x00},
 	{0x05 , 0x01},//hb
@@ -1202,8 +1200,7 @@ static struct reginfo sensor_svga[] =
 	{0xed,0x06},//04 2012.10.26
 	{0xee,0x62},//60 2012.10.26
 	{0xef,0x92},//90 2012.10.26	
-	#if defined(CONFIG_MALATA_D7806) || defined(CONFIG_MALATA_D8009)||defined(CONFIG_MALATA_D1014) \
-		||defined(CONFIG_MALATA_D7022)
+	#if defined(CONFIG_MALATA_D7806)
 
 	///banding for f8->0x84
 	{0xfe, 0x00},
@@ -1222,7 +1219,7 @@ static struct reginfo sensor_svga[] =
 	{0x2e , 0xa1},
 	{0x2f , 0x07},//level4
 	{0x30 , 0x2a},
-	{0x3e, 0x40},
+	//{0x3e, 0x40},
 #else
 	{0xfe,0x00},
 	{0x05 , 0x01},//hb
@@ -1240,7 +1237,7 @@ static struct reginfo sensor_svga[] =
 	{0x2e , 0x80},
 	{0x2f , 0x0f},//level4
 	{0x30 , 0x00},
-	{0x3e, 0x40},
+	//{0x3e, 0x40},
 #endif
 	{0xfe,0x00},	
 	{0xb6,0x03},	
@@ -2779,7 +2776,12 @@ unsigned   int pid=0,shutter,temp_reg;
 	sensor_write(client, 0xfe, 0x00);
 	if(hhs_h == 720)
 		{
-		sensor_write(client, 0xb6, 0x03); 
+		#if defined(CONFIG_MALATA_D7806)
+		sensor_write(client, 0xb6, 0x03);
+		#else
+		sensor_write(client,0xfa,0x00);
+		sensor_write(client, 0xb6, 0x03);
+		#endif
 		}
  //    Sensor_CropSet(mf,20);  if the fov is not pass , we can change the value;
 	//msleep(100);

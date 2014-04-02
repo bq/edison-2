@@ -69,7 +69,7 @@
 #include "dwc_otg_hcd.h"
 #include "usbdev_rk.h"
 static dwc_otg_core_if_t * dwc_core_if = NULL;
-extern int otg_vbus_status, otg_vbus_power_off;
+extern int otg_vbus_status, otg_vbus_power_off, otg_vbus_bypass_num = 1;
 /** 
  * This function is called to initialize the DWC_otg CSR data
  * structures.	The register addresses in the device and host
@@ -1025,7 +1025,10 @@ void dwc_otg_core_host_init(dwc_otg_core_if_t *_core_if)
 	{	
 		hprt0.d32 = dwc_otg_read_hprt0(_core_if);
 		DWC_PRINT("Init: Power Port (%d)\n", hprt0.b.prtpwr);
-		otg_vbus_status = 1;
+		if(otg_vbus_bypass_num)
+			otg_vbus_bypass_num--;
+		else
+			otg_vbus_status = 1;
 		if (hprt0.b.prtpwr == 0 ) 
 		{
 			hprt0.b.prtpwr = 1;
@@ -1385,8 +1388,9 @@ void dwc_otg_hc_cleanup(dwc_otg_core_if_t *_core_if, dwc_hc_t *_hc)
 	dwc_write_reg32(&hc_regs->hcintmsk, 0);
 	dwc_write_reg32(&hc_regs->hcint, 0xFFFFFFFF);
 
-#ifdef DEBUG
-	del_timer(&_core_if->hc_xfer_timer[_hc->hc_num]);
+//#ifdef DEBUG
+#if 1
+//	del_timer(&_core_if->hc_xfer_timer[_hc->hc_num]);
 	{
 		hcchar_data_t hcchar;
 		hcchar.d32 = dwc_read_reg32(&hc_regs->hcchar);
