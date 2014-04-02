@@ -2776,6 +2776,7 @@ unsigned   int pid=0,shutter,temp_reg;
 	sensor_write(client, 0xfe, 0x00);
 	if(hhs_h == 720)
 		{
+		sensor_write(client,0xfa,0x00);
 		sensor_write(client, 0xb6, 0x03); 
 		}
  //    Sensor_CropSet(mf,20);  if the fov is not pass , we can change the value;

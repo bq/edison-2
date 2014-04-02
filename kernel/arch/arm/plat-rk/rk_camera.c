@@ -1596,8 +1596,8 @@ static int rk_sensor_power(struct device *dev, int on)
         }
         
         if (strcmp(plat_data->gpio_res[i].dev_name,dev_name(dev))) {
-            if (sensor_ioctl_cb.sensor_powerdown_cb && on)
-                sensor_ioctl_cb.sensor_powerdown_cb(&plat_data->gpio_res[i],1);
+          //  if (sensor_ioctl_cb.sensor_powerdown_cb && on)
+           //     sensor_ioctl_cb.sensor_powerdown_cb(&plat_data->gpio_res[i],1);
         } else {            
             dev_io = &plat_data->gpio_res[i];
             real_pwroff = true;
@@ -1613,8 +1613,8 @@ static int rk_sensor_power(struct device *dev, int on)
         }
         
         if (strcmp(new_camera->dev_name,dev_name(dev))) {
-            if (sensor_ioctl_cb.sensor_powerdown_cb && on)
-                sensor_ioctl_cb.sensor_powerdown_cb(&new_camera->io,1);
+           // if (sensor_ioctl_cb.sensor_powerdown_cb && on)
+            //    sensor_ioctl_cb.sensor_powerdown_cb(&new_camera->io,1);
         } else {
             new_device = new_camera;
             dev_io = &new_camera->io;

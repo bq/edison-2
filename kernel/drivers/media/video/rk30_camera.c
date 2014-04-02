@@ -952,7 +952,7 @@ static void rk30_camera_request_reserve_mem(void)
         max_resolution = PMEM_SENSOR_FULL_RESOLUTION_CIF_1;
     if (max_resolution < PMEM_SENSOR_FULL_RESOLUTION_CIF_0)
         max_resolution = PMEM_SENSOR_FULL_RESOLUTION_CIF_0;
-
+   max_resolution = 0x800000;
     switch (max_resolution)
     {
         case 0x800000:
@@ -1012,13 +1012,11 @@ static void rk30_camera_request_reserve_mem(void)
         rk_camera_platform_data.meminfo.name = "camera_ipp_mem";
         rk_camera_platform_data.meminfo.start = board_mem_reserve_add("camera_ipp_mem",cam_ipp_mem);
         rk_camera_platform_data.meminfo.size= cam_ipp_mem;
-
         memcpy(&rk_camera_platform_data.meminfo_cif1,&rk_camera_platform_data.meminfo,sizeof(struct rk29camera_mem_res));
     #else
         rk_camera_platform_data.meminfo.name = "camera_ipp_mem_0";
         rk_camera_platform_data.meminfo.start = board_mem_reserve_add("camera_ipp_mem_0",PMEM_CAMIPP_NECESSARY_CIF_0);
         rk_camera_platform_data.meminfo.size= PMEM_CAMIPP_NECESSARY_CIF_0;
-        
         rk_camera_platform_data.meminfo_cif1.name = "camera_ipp_mem_1";
         rk_camera_platform_data.meminfo_cif1.start =board_mem_reserve_add("camera_ipp_mem_1",PMEM_CAMIPP_NECESSARY_CIF_1);
         rk_camera_platform_data.meminfo_cif1.size= PMEM_CAMIPP_NECESSARY_CIF_1;

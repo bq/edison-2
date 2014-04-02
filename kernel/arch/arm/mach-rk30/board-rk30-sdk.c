@@ -872,7 +872,7 @@ static struct sensor_platform_data mma7660_info = {
 	.irq_enable = 1,
 	.poll_delay_ms = 20,
         .init_platform_hw = mma7660_init_platform_hw,
-        .orientation = { 1, 0, 0, 0, 0, -1, 0, -1, 0},
+        .orientation = { 1, 0, 0, 0, -1, 0, 0, 0,-1},
 };
 #else
 static struct sensor_platform_data mma7660_info = {

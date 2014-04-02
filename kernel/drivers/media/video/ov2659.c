@@ -65,7 +65,7 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_DigitalZoom   0
 #define CONFIG_SENSOR_Focus         0
 #define CONFIG_SENSOR_Exposure      0
-#define CONFIG_SENSOR_Flash         1
+#define CONFIG_SENSOR_Flash         0
 #define CONFIG_SENSOR_Mirror        0 
 #define CONFIG_SENSOR_Flip          0
 
@@ -2283,9 +2283,11 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
     }
 
     if ((int)winseqe_set_addr  != sensor->info_priv.winseqe_cur_addr) {
-        #if CONFIG_SENSOR_Flash
+		if (sensor_fmt_capturechk(sd,mf) == true)
+			sensor_parameter_record(client);
+ #if CONFIG_SENSOR_Flash
         if (sensor_fmt_capturechk(sd,mf) == true) {      /* ddl@rock-chips.com : Capture */
-            sensor_parameter_record(client);
+         //   sensor_parameter_record(client);
             if ((sensor->info_priv.flash == 1) || (sensor->info_priv.flash == 2)) {
                 sensor_ioctrl(icd, Sensor_Flash, Flash_On);
                 SENSOR_DG("%s flash on in capture!\n", SENSOR_NAME_STRING());
@@ -2324,15 +2326,15 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
             msleep(600);
 			sensor->info_priv.snap2preview = true;
 		} else if (sensor_fmt_videochk(sd,mf) == true) {			/* ddl@rock-chips.com : Video */
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
 			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
-			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
+			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
 			sensor->info_priv.video2preview = true;
 		} else if ((sensor->info_priv.snap2preview == true) || (sensor->info_priv.video2preview == true)) {
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
 			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
-			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
+			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
 			#if CONFIG_SENSOR_Scene
 				qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_SCENE);  // hhs_0621
