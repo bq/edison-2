@@ -1,0 +1,6 @@
+#
+# Makefile for the kernel multimedia device drivers.
+#
+obj-$(CONFIG_DIBCOM8096_CONTROL)	+= dib8000p.o dib8000_gpio.o dib8000_io.o dib8000_monitor.o dib8000_power.o dib8000_tune.o
+
+EXTRA_CFLAGS += -Idrivers/media/dvb/dvb-core/  -Idrivers/media/dvb/frontends -Idrivers/media/dvb/rkdtv/DIBCom8096/include/

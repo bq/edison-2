@@ -1,0 +1,9 @@
+# gsensor drivers
+
+obj-$(CONFIG_LS_CM3217) 		+= cm3217.o
+obj-$(CONFIG_LS_AL3006) 		+= ls_al3006.o
+obj-$(CONFIG_LS_STK3171) 		+= ls_stk3171.o
+obj-$(CONFIG_LS_LSL29023)              += lsl29023.o
+obj-$(CONFIG_LS_ISL5151)              += isl5151.o
+obj-$(CONFIG_LS_ISL29023) 		+= isl29023.o
+obj-$(CONFIG_LS_AP321XX) 		+= ls_ap321xx.o
