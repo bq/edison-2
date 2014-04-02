@@ -1,0 +1,308 @@
+config ARCH_RK30XX
+	depends on ARCH_RK30
+	bool
+
+config ARCH_RK3066B
+	depends on ARCH_RK30
+	bool
+
+choice
+	prompt "Rockchip SoC Type"
+	depends on ARCH_RK30
+	default SOC_RK3066
+
+config SOC_RK3000
+	bool "RK3000"
+	select ARCH_RK30XX
+
+config SOC_RK3028
+	bool "RK3028"
+	select ARCH_RK3066B
+
+config SOC_RK3066
+	bool "RK3066"
+	select ARCH_RK30XX
+
+config SOC_RK3068
+	bool "RK3068"
+	select ARCH_RK30XX
+
+config SOC_RK3066B
+	bool "RK3066B"
+	select ARCH_RK3066B
+	select USB_ARCH_HAS_EHCI
+
+config SOC_RK3108
+	bool "RK3108"
+	select ARCH_RK3066B
+	select USB_ARCH_HAS_EHCI
+
+config SOC_RK3168
+	bool "RK3168"
+	select ARCH_RK3066B
+	select USB_ARCH_HAS_EHCI
+
+config SOC_RK3168M
+	bool "RK3168M"
+	select ARCH_RK3066B
+	select USB_ARCH_HAS_EHCI
+
+endchoice
+
+choice
+	prompt "RK30xx Board Type"
+	depends on ARCH_RK30XX
+	default MACH_RK30_SDK
+
+config MACH_RK30_SDK
+	bool "RK30 SDK board"
+
+config MACH_RK30_DS975
+	bool "RK30 DS975 board"
+
+config MACH_RK3066_SDK
+	bool "RK3066 SDK board"
+
+config MACH_RK30_DS1001B
+        bool "RK30 DS1001B board"
+
+config MACH_RK30_PHONE
+	bool "RK30 smart phone board"
+
+config MACH_RK30_PHONE_LOQUAT
+	bool "RK30 smart phone loquat board"
+
+config MACH_RK30_PHONE_A22
+        bool "RK30 smart phone a22 board"
+
+config MACH_RK30_PHONE_PAD
+        bool "RK30 phone pad board"
+
+endchoice
+
+choice
+	prompt "RK30 phone pad board type"
+	depends on MACH_RK30_PHONE_PAD
+	default MACH_RK30_PHONE_PAD_DS763
+
+	config MACH_RK30_PHONE_PAD_DS763
+	bool "ds763"
+
+	config MACH_RK30_PHONE_PAD_C8003
+	bool "c8003"
+
+endchoice
+
+choice
+	prompt "RK3028 Board Type"
+	depends on SOC_RK3028
+
+config MACH_RK3028_TB
+	bool "RK3028 Top Board"
+
+endchoice
+
+choice
+	prompt "RK3066B Board Type"
+	depends on SOC_RK3066B
+
+config MACH_RK3066B_FPGA
+	bool "RK3066B FPGA board"
+	select RK_FPGA
+
+config MACH_RK3066B_SDK
+	bool "RK3066B SDK board"
+
+config MACH_RK3066B_M701
+	bool "RK3066B M701 board"
+
+endchoice
+
+choice
+	prompt "RK3168M Board Type"
+	depends on SOC_RK3168M
+
+config MACH_RK3168M_TB
+	bool "RK3168M Top Board"
+
+endchoice
+
+menuconfig PROJECT_TYPE
+	bool "RK31xx Projectg Type"
+
+if PROJECT_TYPE
+
+menuconfig MALATA_D1004
+	bool "Malata D10** Project"
+
+choice
+	prompt "MALATA Project Type"
+	depends on MALATA_D1004
+
+config MALATA_1004
+	bool "Malata D1004 Project"
+
+config LCD_EJ101H_D1004
+        bool "Malata D1004 Lcd Config"
+
+config MALATA_D1001
+	bool "Malata D1001 Project"
+
+config MALATA_D7005
+	bool "Malata D7005 Project"
+
+config MALATA_C1017
+	bool "Malata C1017 Project"
+
+config MALATA_D1003
+	bool "Malata D1003 Project"
+
+config MALATA_D1012
+	bool "Malata D1012 Project"
+
+config MALATA_D1013
+	bool "Malata D1013 Project"
+
+config MALATA_D1014
+	bool "Malata D1014 Project"
+
+config MALATA_D8009
+	bool "Malata D8009 Project"
+
+config MALATA_D7022
+	bool "Malata D7022 Project"
+endchoice
+menuconfig MALATA_D7803
+	bool "Malata D7803** Project"
+
+config MALATA_D7803_Q7
+	bool "Malata D7803 Q7 Project"
+	depends on MALATA_D7803
+
+config MALATA_D7806
+	bool "Malata D7806 Project"
+	depends on MALATA_D7803
+
+menuconfig MALATA_D1005
+	bool "Malata D1005 Project"
+
+menuconfig MALATA_D8006
+        bool "Malata D8006** Project"
+
+menuconfig MALATA_D7014
+        bool "Malata D7014** Project"
+
+endif
+
+choice
+	prompt "RK3108 Board Type"
+	depends on SOC_RK3108
+
+config MACH_RK3108_TB
+	bool "RK3108 Top Board"
+
+endchoice
+
+menuconfig EMI_TEST_CONFIG
+	bool "EMI TEST CONFIG"
+
+if EMI_TEST_CONFIG
+choice
+	prompt "HDMI EMI CONFIG"
+	default HDMI_EMI_DISABLE
+
+config HDMI_EMI_ENABLE
+	bool "hdmi emi enable config"
+
+config HDMI_EMI_DISABLE
+	bool "hdmi emi disable config"
+
+endchoice
+
+choice
+	prompt "CAMERA EMI CONFIG"
+	default CAMERA_EMI_DISABLE
+
+config CAMERA_EMI_ENABLE
+	bool "camera emi enable config"
+
+config CAMERA_EMI_DISABLE
+	bool "camera emi disable config"
+
+endchoice
+
+choice
+	prompt "CODEC EMI CONFIG"
+	default CODEC_EMI_DISABLE
+
+config CODEC_EMI_ENABLE
+	bool "codec emi enable config"
+
+config CODEC_EMI_DISABLE
+	bool "codec emi disable config"
+
+endchoice
+endif
+
+choice
+	prompt "DDR Type"
+	default DDR_TYPE_DDR3
+
+config DDR_TYPE_LPDDR2
+	bool "lpddr2 type"
+
+config DDR_TYPE_DDR3
+	bool "ddr3 type"
+endchoice
+
+config RK3188_STABILITY_PATH
+       bool "RK3188 stability path"
+
+choice
+       prompt "RK3188 DDR FREQUENCE"
+       default DDR_SUPPORT_410M
+
+config DDR_SUPPORT_504M
+       bool "ddr  support  504M"
+
+config DDR_SUPPORT_480M
+       bool "ddr  support  480M"
+
+config DDR_SUPPORT_410M
+       bool "ddr  support  410M"
+
+config DDR_SUPPORT_336M
+       bool "ddr  support  336M"
+endchoice
+
+choice
+	prompt "RK3168 Board Type"
+	depends on SOC_RK3168
+
+config MACH_RK3168_TB
+	bool "RK3168 Top Board"
+
+config MACH_RK3168_LR097
+	bool "RK3168 LR097 JC21CA board"
+
+config MACH_RK3168_DS1006H
+	bool "RK3168 DS1006h Board"
+
+config MACH_RK3168_86V
+	bool "RK3168 86V Board"
+
+config MACH_RK3168_86V_OLD
+        bool "RK3168 86V  Old Board"
+endchoice
+
+choice
+	prompt "RK3168M Board Type"
+	depends on SOC_RK3168M
+
+config MACH_RK3168M_TB
+	bool "RK3168M Top Board"
+
+endchoice
+
+config NON_FULLSCREEN_LOGO
+  bool "Non_fullscreen_config"

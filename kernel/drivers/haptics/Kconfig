@@ -1,0 +1,16 @@
+menuconfig HAPTICS
+	bool "HAPTICS Support"
+	help
+	  Say Y to enable Linux Haptics support.  This allows control of supported
+	  haptics chips from both userspace and optionally, by kernel events (triggers).
+
+if HAPTICS
+
+comment "haptics drivers"
+
+config HAPTICS_DRV2605
+	tristate "HAPTICS Support for Texas Instruments DRV2605"
+	help
+	  This option enables support for on-chip drv2605 drivers.
+
+endif # HAPTICS
