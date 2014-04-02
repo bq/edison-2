@@ -85,40 +85,20 @@ static bool gpu_is_mali400;
 static struct clk *ddr_clk;
 
 #ifdef CONFIG_GPU_FREQ_LIMITED_BY_TEMP
+#define LIMIT_MODE_1 	1
+#define LIMIT_MODE_2 	2
+#define LIMIT_MODE_3 	3
+
 extern void kernel_power_off(void);
 extern int tmp108_reg_to_mC(void);
 static struct workqueue_struct *g_wq;
 static struct delayed_work 	    delay_work;
 static int gpu_max_freq = 600;
 
-static struct cpufreq_frequency_table dvfs_arm_table_1000[] = {
-		{.frequency = 312 * 1000,       .index = 900 * 1000},
-		{.frequency = 504 * 1000,       .index = 925 * 1000},
-#if defined(CONFIG_MALATA_D7806)
-		{.frequency = 816 * 1000,       .index = 1025 * 1000},
-#else
-		{.frequency = 816 * 1000,       .index = 1000 * 1000},
-#endif
-		{.frequency = 1008 * 1000,      .index = 1075 * 1000},
-		{.frequency = CPUFREQ_TABLE_END},
-};
-
-static struct cpufreq_frequency_table dvfs_arm_table_1600[] = {
-		{.frequency = 312 * 1000,       .index = 900 * 1000},
-		{.frequency = 504 * 1000,       .index = 925 * 1000},
-#if defined(CONFIG_MALATA_D7806)
-		{.frequency = 816 * 1000,       .index = 1025 * 1000},
-#else
-		{.frequency = 816 * 1000,       .index = 1000 * 1000},
-#endif
-		{.frequency = 1008 * 1000,      .index = 1075 * 1000},
-		{.frequency = 1200 * 1000,      .index = 1200 * 1000},
-		{.frequency = 1416 * 1000,      .index = 1250 * 1000},
-		{.frequency = 1608 * 1000,      .index = 1350 * 1000},
-		{.frequency = CPUFREQ_TABLE_END},
-};
-
 extern int dvfs_set_freq_volt_table(struct clk *clk, struct cpufreq_frequency_table *table);
+extern struct cpufreq_frequency_table dvfs_arm_table_1000[];
+extern struct cpufreq_frequency_table dvfs_arm_table_1600[];
+
 #endif
 
 
@@ -227,7 +207,7 @@ static struct cpufreq_frequency_table temp_limits_gpu_perf[] = {
 };
 #endif
 
-#ifdef CONFIG_GPU_FREQ_LIMITED_BY_TEMP
+#if defined(CONFIG_GPU_FREQ_LIMITED_BY_TEMP) && defined(CONFIG_TMP108)
 static int rk3188_get_temp(void)
 {
 	int temp;
@@ -323,14 +303,20 @@ static void cpu_set_freq_1600(void)
 
 static void gpu_max_freq_set(int value)
 {
-	if((1 == value) && (400 == gpu_max_freq)){
+	if((LIMIT_MODE_1 == value) && (400 == gpu_max_freq)){
 		gpu_set_freq_600();
 		cpu_set_freq_1600();
 		gpu_max_freq = 600;
-	}else if((2 == value) && (600 == gpu_max_freq)){
+	}
+	else if((LIMIT_MODE_2 == value) && (400 == gpu_max_freq)){
 		gpu_set_freq_400();
-		cpu_set_freq_1000();
-		gpu_max_freq = 400;
+	}
+	else if(LIMIT_MODE_3 == value){
+		gpu_set_freq_400();
+		if(600 == gpu_max_freq){
+			cpu_set_freq_1000();
+			gpu_max_freq = 400;
+		}
 	}
 }
 static void gpu_max_freq_set_by_temp(struct work_struct *work)
@@ -341,9 +327,12 @@ static void gpu_max_freq_set_by_temp(struct work_struct *work)
 	FREQ_DBG("cpu temperature %d\n",temp);
 
 	if(temp >= 70)
-		gpu_max_freq_set(2);
+		gpu_max_freq_set(LIMIT_MODE_3);
+	else if((temp > 60) && (temp < 70))
+		gpu_max_freq_set(LIMIT_MODE_2);
 	else if(temp <= 60)
-		gpu_max_freq_set(1);
+		gpu_max_freq_set(LIMIT_MODE_1);
+
 #if 1
 	if(temp >= 75)
 	{
@@ -351,7 +340,8 @@ static void gpu_max_freq_set_by_temp(struct work_struct *work)
 		while(1);
 	}
 #endif
-	queue_delayed_work(g_wq,&delay_work,msecs_to_jiffies(1000));
+
+	queue_delayed_work(g_wq,&delay_work,msecs_to_jiffies(3000));
 }
 #endif
 static void rk3188_cpufreq_temp_limit_work_func(struct work_struct *work)

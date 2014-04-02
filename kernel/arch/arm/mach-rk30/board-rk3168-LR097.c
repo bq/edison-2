@@ -3879,6 +3879,39 @@ static struct cpufreq_frequency_table dvfs_arm_table[] = {
         {.frequency = CPUFREQ_TABLE_END},
 };
 
+#ifdef CONFIG_GPU_FREQ_LIMITED_BY_TEMP
+struct cpufreq_frequency_table dvfs_arm_table_1000[] = {
+		{.frequency = 312 * 1000,       .index = 925 * 1000},
+		{.frequency = 504 * 1000,       .index = 950 * 1000},
+#if defined(CONFIG_MALATA_D7806)
+		{.frequency = 816 * 1000,       .index = 1025 * 1000},
+#else
+		{.frequency = 816 * 1000,       .index = 1000 * 1000},
+#endif
+		{.frequency = 1008 * 1000,      .index = 1075 * 1000},
+		{.frequency = CPUFREQ_TABLE_END},
+};
+
+struct cpufreq_frequency_table dvfs_arm_table_1600[] = {
+		{.frequency = 312 * 1000,       .index = 925 * 1000},
+		{.frequency = 504 * 1000,       .index = 950 * 1000},
+#if defined(CONFIG_MALATA_D7806)
+		{.frequency = 816 * 1000,       .index = 1025 * 1000},
+#else
+		{.frequency = 816 * 1000,       .index = 1000 * 1000},
+#endif
+		{.frequency = 1008 * 1000,      .index = 1075 * 1000},
+		{.frequency = 1200 * 1000,      .index = 1200 * 1000},
+#if defined(CONFIG_MALATA_D1013)
+		{.frequency = 1416 * 1000,      .index = 1300 * 1000},
+#else
+		{.frequency = 1416 * 1000,      .index = 1250 * 1000},
+#endif
+        {.frequency = 1608 * 1000,      .index = 1350 * 1000},
+        {.frequency = CPUFREQ_TABLE_END},
+};
+#endif
+
 static struct cpufreq_frequency_table dvfs_gpu_table[] = {	
 #if defined(CONFIG_ARCH_RK3188)
         {.frequency = 133 * 1000,       .index = 975 * 1000},//the mininum rate is limited 133M for rk3188
