@@ -61,6 +61,8 @@ static struct rt5616_init_reg init_list[] = {
 	{RT5616_HPO_MIXER	, 0x4000}, //HPVOL -> HPO
 #if defined(CONFIG_MALATA_D7005) || defined(CONFIG_MALATA_D7803_Q7)
 	{RT5616_HP_VOL		, 0x8d8d}, //unmute HPVOL
+#elif defined(CONFIG_MALATA_D1014)
+	{RT5616_HP_VOL		, 0x8c8c}, //unmute HPVOL
 #else
 	{RT5616_HP_VOL		, 0x8f8f}, //unmute HPVOL
 #endif

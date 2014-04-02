@@ -94,12 +94,6 @@ extern bool is_usbcharging(void);
 extern void kernel_power_off(void);
 extern void rk30_bat_unregister(void);
 
-#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
-extern void bq24196_charge_disable(void);
-extern void bq24196_charge_en(void);
-static int charge_en_flags = 0;
-#endif
-
 extern volatile bool low_usb_charge;
 extern int bq27410_init = 0;
 
@@ -269,15 +263,6 @@ static int bq27410_battery_temperature(struct bq27410_device_info *di)
 
 	DBG("Enter:%s %d--temp = %d\n",__FUNCTION__,__LINE__,temp);
 
-#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
-		if((temp >= 450) && (0 == charge_en_flags)){
-			bq24196_charge_disable();
-			charge_en_flags = 1;
-		}else if((temp <= 400) && (1 == charge_en_flags)){
-			bq24196_charge_en();
-			charge_en_flags = 0;
-		}
-#endif
 	return temp;
 }
 

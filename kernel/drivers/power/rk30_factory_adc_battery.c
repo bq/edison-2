@@ -275,6 +275,11 @@ extern bq24196_mode;
 #endif
 extern int charging_flag;
 
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+extern int charge_en_flags;
+extern int check_charge_ok;
+extern int update_temp_ok;
+#endif
 extern int dwc_vbus_status(void);
 extern int get_gadget_connect_flag(void);
 extern int dwc_otg_check_dpdm(void);
@@ -1569,6 +1574,11 @@ static int rk30_adc_battery_get_usb_property(struct power_supply *psy,
 				val->intval = bat ->usb_charging;
 			if((1 == charging_flag) && (strstr(saved_command_line,"charger")))
 				val->intval = 0;
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+			if((1 == check_charge_ok) && (!strstr(saved_command_line,"charger")))
+				if((1 == charge_en_flags) && (1 == update_temp_ok))
+				val->intval = 0;
+#endif
 			DBG("%s......bat ->usb_charging=%d,charging_flag=%d,strstr=%d\n",__func__,bat ->usb_charging,charging_flag,(!strstr(saved_command_line,"charger")));
 
 			}
@@ -1621,6 +1631,11 @@ static int rk30_adc_battery_get_ac_property(struct power_supply *psy,
 			val->intval = bat ->ac_charging;
 			if( (1 == charging_flag) && (strstr(saved_command_line,"charger")))
 				val->intval = 0;
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+			if((1 == check_charge_ok) && (!strstr(saved_command_line,"charger")))
+				if((1 == charge_en_flags) && (1 == update_temp_ok))
+				val->intval = 0;
+#endif
 			DBG("%s......bat ->ac_charging=%d,charging_flag=%d,strstr=%d\n",__func__,bat ->ac_charging,charging_flag,(!strstr(saved_command_line,"charger")));
 		}
 		break;

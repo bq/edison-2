@@ -13,7 +13,7 @@
 #define OUT_FACE	    OUT_P888//OUT_D888_P666
 
 
-#define DCLK			75000000
+#define DCLK			71000000
 #define LCDC_ACLK         500000000           //29 lcdc axi DMA ÆµÂÊ
 
 /* Timing */

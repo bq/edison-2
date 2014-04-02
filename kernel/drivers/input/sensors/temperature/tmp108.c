@@ -76,6 +76,43 @@ static int tmp108_write(struct i2c_client *client, u8 reg, u8 const buf[], unsig
 	return ret;
 }
 
+static int sensor_tmp108_suspend(struct i2c_client *client)
+{
+	struct sensor_private_data *sensor =
+	    (struct sensor_private_data *) i2c_get_clientdata(client);
+	u8 buf[2] ={0};
+	int result;
+
+	buf[0]=0x24;
+	buf[1]=0x10;
+	result=tmp108_write(client,TMP108_CONF_REG,buf,2);
+	if (result < 0) {
+		dev_err(&client->dev, "error reading config register\n");
+		return result;
+	}
+	//printk("yemk sensor_tmp108_suspend buf[0]=0x%x buf[1]=0x%x\n",buf[0],buf[1]);
+
+	return 0;
+}
+
+static int sensor_tmp108_resume(struct i2c_client *client)
+{
+	struct sensor_private_data *sensor =
+	    (struct sensor_private_data *) i2c_get_clientdata(client);
+	u8 buf[2] ={0};
+	int result;
+
+	buf[0]=0x26;
+	buf[1]=0x10;
+	result=tmp108_write(client,TMP108_CONF_REG,buf,2);
+	if (result < 0) {
+		dev_err(&client->dev, "error reading config register\n");
+		return result;
+	}
+	//printk("yemk sensor_tem108_resume buf[0]=0x%x buf[1]=0x%x\n",buf[0],buf[1]);
+
+	return 0;
+}
 
 int tmp108_reg_to_mC(void)
 {
@@ -282,7 +319,7 @@ static int sensor_report_value(struct i2c_client *client)
 }
 
 
-struct sensor_operate temperature_ms5607_ops = {
+struct sensor_operate temperature_tmp108_ops = {
 	.name				= "tmp108",
 	.type				= SENSOR_TYPE_TEMPERATURE,	//sensor type and it should be correct
 	.id_i2c				= TEMPERATURE_ID_TMP108_l,	//i2c id number
@@ -298,6 +335,8 @@ struct sensor_operate temperature_ms5607_ops = {
 	.active				= sensor_active,	
 	.init				= sensor_init,
 	.report				= sensor_report_value,
+	.suspend            = sensor_tmp108_suspend,
+	.resume            = sensor_tmp108_resume,
 };
 
 /****************operate according to sensor chip:end************/
@@ -305,11 +344,11 @@ struct sensor_operate temperature_ms5607_ops = {
 //function name should not be changed
 static struct sensor_operate *temperature_get_ops(void)
 {
-	return &temperature_ms5607_ops;
+	return &temperature_tmp108_ops;
 }
 
 
-static int __init temperature_ms5607_init(void)
+static int __init temperature_tmp108_init(void)
 {
 	struct sensor_operate *ops = temperature_get_ops();
 	int result = 0;
@@ -319,7 +358,7 @@ static int __init temperature_ms5607_init(void)
 	return result;
 }
 
-static void __exit temperature_ms5607_exit(void)
+static void __exit temperature_tmp108_exit(void)
 {
 	struct sensor_operate *ops = temperature_get_ops();
 	int type = ops->type;
@@ -327,6 +366,6 @@ static void __exit temperature_ms5607_exit(void)
 }
 
 
-module_init(temperature_ms5607_init);
-module_exit(temperature_ms5607_exit);
+module_init(temperature_tmp108_init);
+module_exit(temperature_tmp108_exit);
 

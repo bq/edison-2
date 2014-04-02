@@ -64,7 +64,9 @@ static struct workqueue_struct *wq_charge_test;
 static struct delayed_work delaywork_charge_test;
 static struct wake_lock charge_lock;
 extern bool is_usbcharging(void);
-
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+int check_charge_ok = 0;
+#endif
 static int __init pwr_on_thrsd_setup(char *str)
 {
 
@@ -268,6 +270,10 @@ static int  __init start_charge_logo_display(void)
 			printk("power in charge mode\n");
 		}
 	}
+
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+	 check_charge_ok = 1;
+#endif
 
 	return 0;
 } 
