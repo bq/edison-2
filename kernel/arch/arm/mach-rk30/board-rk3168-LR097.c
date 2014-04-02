@@ -938,8 +938,8 @@ static struct sensor_platform_data akm8963_info =
 		},
 	#elif defined(CONFIG_MALATA_D1004) && defined(CONFIG_MALATA_D7022)
 		{
-			{0, -1, 0},
 			{1, 0, 0},
+			{0, 1, 0},
 			{0, 0, 1},
 		},
 	#else
@@ -1112,6 +1112,21 @@ static struct ql_vx5a3b_t qlvx5a3b_platdata = {
 };
 #endif
 
+#if defined(CONFIG_KIONIX_KMX61G_SENSOR)
+#include <linux/input/kmx61.h>
+#define KMX61G_INT_PIN  RK30_PIN0_PB7
+static struct kmx61_platform_data kmx61_board_info = {
+		.min_interval   = 5,
+		.init_interval  = 200,
+		.axis_map_x     = 0,
+		.axis_map_y     = 1,
+		.axis_map_z     = 2,
+		.negate_x       = 1,
+		.negate_y       = 0,
+		.negate_z       = 1,
+};
+#endif
+
 #ifdef CONFIG_FB_ROCKCHIP
 #if defined(CONFIG_MALATA_D1014)||defined(CONFIG_MALATA_D8009)
 #define LCD_CS_PIN         iomux_mode_to_gpio(PWM3)
@@ -1183,7 +1198,7 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
    msleep(30); //[M]According to datasheet, modify 200ms->30ms to fix "white screen" when powerup && resume
    #endif*/
     #if defined(CONFIG_MALATA_D1004) && defined(CONFIG_LCD_EJ101H_D1004) || defined(CONFIG_MALATA_D1014)
-//    msleep(30); //[M]According to datasheet, modify 200ms->30ms to fix "white screen" when powerup && resume
+    msleep(30); //[M]According to datasheet, modify 200ms->30ms to fix "white screen" when powerup && resume
     #else
     msleep(200);
     #endif
@@ -1210,21 +1225,6 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
     #endif
 
 #else
-	if(LCD_CS_PIN !=INVALID_GPIO)
-	{
-		ret = gpio_request(LCD_CS_PIN, NULL);
-		if (ret != 0)
-		{
-			gpio_free(LCD_CS_PIN);
-			printk(KERN_ERR "request lcd cs pin fail!\n");
-			return -1;
-		}
-		else
-		{
-			gpio_direction_output(LCD_CS_PIN, LCD_CS_VALUE);
-		}
-	}
-
 	if(LCD_EN_PIN !=INVALID_GPIO)
 	{
 		ret = gpio_request(LCD_EN_PIN, NULL);
@@ -1240,6 +1240,23 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 			printk("honghaishen_test set LCD_EN_PIN able\n");
 		}
 	}
+	mdelay(20);  //yangshl modify LCD power timing according LCD engineer
+
+	if(LCD_CS_PIN !=INVALID_GPIO)
+	{
+		ret = gpio_request(LCD_CS_PIN, NULL);
+		if (ret != 0)
+		{
+			gpio_free(LCD_CS_PIN);
+			printk(KERN_ERR "request lcd cs pin fail!\n");
+			return -1;
+		}
+		else
+		{
+			gpio_direction_output(LCD_CS_PIN, LCD_CS_VALUE);
+		}
+	}
+
 #endif//Modifed by EvanZeng End
 
 	if(LCD_DRV_PIN !=INVALID_GPIO)
@@ -1296,11 +1313,21 @@ static void fb_lcd_drv_ctl(bool on)
 }
 int rk_fb_io_disable(void)
 {
+#if  defined(LCD_DISP_ON_PIN) && defined(CONFIG_MALATA_D1013)
+	int pwm_gpio;
+	gpio_direction_output(BL_EN_PIN, !BL_EN_VALUE);
+	mdelay(100);
+
+	pwm_gpio = iomux_mode_to_gpio(PWM_MODE);
+	gpio_request(pwm_gpio, "bl_pwm");
+	gpio_direction_output(pwm_gpio, GPIO_LOW);
+	mdelay(200);
+#endif
 	if(LCD_CS_PIN !=INVALID_GPIO)
 	{
 		gpio_set_value(LCD_CS_PIN, !LCD_CS_VALUE);
 	}
-	msleep(30);
+	mdelay(20);
 	if(LCD_EN_PIN !=INVALID_GPIO)
 	{
 		gpio_set_value(LCD_EN_PIN, !LCD_EN_VALUE);
@@ -1345,7 +1372,7 @@ static int rk_fb_io_enable(void)
    #endif*/
 
     #if defined(CONFIG_MALATA_D1004) && defined(CONFIG_LCD_EJ101H_D1004) || defined(CONFIG_MALATA_D1014)
-//    msleep(30); //[M]According to datasheet, modify 200ms->30ms to fix "white screen" when powerup && resume
+    msleep(30); //[M]According to datasheet, modify 200ms->30ms to fix "white screen" when powerup && resume
     #else
     msleep(200);
     #endif
@@ -1360,10 +1387,6 @@ static int rk_fb_io_enable(void)
     msleep(20);
     #endif
 #else
-	if(LCD_CS_PIN !=INVALID_GPIO)
-	{
-		gpio_set_value(LCD_CS_PIN, LCD_CS_VALUE);
-	}
 	if(LCD_EN_PIN !=INVALID_GPIO)
 	{
 		gpio_set_value(LCD_EN_PIN, LCD_EN_VALUE);
@@ -1371,6 +1394,13 @@ static int rk_fb_io_enable(void)
 		  	printk("honghaishen_test LCD en pin is open \n");
 		  printk("honghaishen_test LCD EN PIN IS OK \n");
 	}
+	mdelay(20); //yangshl modify LCD timing according LCD engineer 2013.09.30
+
+	if(LCD_CS_PIN !=INVALID_GPIO)
+	{
+		gpio_set_value(LCD_CS_PIN, LCD_CS_VALUE);
+	}
+
 	if (LCD_VDD_EN != INVALID_GPIO)
 	{
 		gpio_set_value(LCD_VDD_EN, LCD_VDD_EN_VALUE);
@@ -1579,6 +1609,7 @@ static struct rt5616_codec_platform_data rt5616_codec_pdata = {
 	.fb_status = fb_status,
 	.fb_lcd_drv_ctl = fb_lcd_drv_ctl,
 };
+unsigned int rt5616_codec_spk_io;
 #endif
 #ifdef CONFIG_RK_HDMI
 #define RK_HDMI_RST_PIN 			RK30_PIN3_PB2
@@ -2262,9 +2293,9 @@ struct bq27541_platform_data bq27541_data = {
 #elif defined(CONFIG_BATTERY_BT_B0BFS_4571107)
 	.capacity_min = 5,
 #elif defined(CONFIG_BATTERY_BT_B0BD)
-	.capacity_min = 3,
+	.capacity_min = 4,
 #elif defined(CONFIG_BATTERY_BT_B0B5G)
-	.capacity_min = 7,
+	.capacity_min = 8,
 #else
 	.capacity_min = 5,
 #endif
@@ -2873,6 +2904,16 @@ static struct i2c_board_info __initdata i2c0_info[] = {
 	},
 #endif
 
+#ifdef CONFIG_KIONIX_KMX61G_SENSOR
+	{
+		.type             = "kmx61",
+		.addr              = KMX61_I2C_ADDR,
+		.flags             = 0,
+		//.irq             = KMX61G_INT_PIN,
+		.platform_data = &kmx61_board_info,
+		},
+#endif
+
 };
 #endif
 
@@ -3088,8 +3129,13 @@ static struct pmu_info  act8846_dcdc_info[] = {
 	},
 	{
 		.name          = "act_dcdc4",   //vccio
+		#ifdef CONFIG_MALATA_D7022
+		.min_uv          = 3150000,
+		.max_uv         = 3150000,
+		#else
 		.min_uv          = 3000000,
 		.max_uv         = 3000000,
+		#endif
 		#ifdef CONFIG_ACT8846_SUPPORT_RESET
 		.suspend_vol  =  3000000,
 		#else
@@ -3541,7 +3587,11 @@ static struct rk29_keys_button key_button[] = {
         {
                 .desc   = "vol-",
                 .code   = KEY_VOLUMEDOWN,
+#ifdef CONFIG_MALATA_D7022
+		.adc_value		= 768,
+#else
 		.adc_value      = 170,
+#endif
                 .gpio   = INVALID_GPIO,
                 .active_low = PRESS_LEV_LOW,
         },
@@ -3656,14 +3706,14 @@ static void rk30_pm_power_off(void)
 		tps65910_device_shutdown();//tps65910 shutdown
 	}
 	#endif
-
+/*
 // Mute PA before system power down to avoid "pop" noise, xmylm, 20130704, MT-BUG:9568
 #ifdef CONFIG_SND_SOC_RT5616
 	if (rt5616_codec_pdata.spk_ctl_io)
 		gpio_direction_output(rt5616_codec_pdata.spk_ctl_io, GPIO_LOW);
 	msleep(50);
 #endif
-
+*/
 	gpio_direction_output(POWER_ON_PIN, GPIO_LOW);
 	while (1);
 }
@@ -3753,6 +3803,11 @@ static void __init machine_rk30_board_init(void)
         gpio_direction_output(POWER_ON_PIN, GPIO_HIGH);
 #if defined (CONFIG_BATTERY_BQ24196)
 	bq24196_charge_en();
+#endif
+
+#ifdef CONFIG_SND_SOC_RT5616
+	if (rt5616_codec_pdata.spk_ctl_io)
+		rt5616_codec_spk_io = rt5616_codec_pdata.spk_ctl_io;
 #endif
 
 	rk30_i2c_register_board_info();
@@ -3865,8 +3920,8 @@ static struct cpufreq_frequency_table dvfs_ddr_table[] = {
 };
 #else
 static struct cpufreq_frequency_table dvfs_arm_table[] = {
-		{.frequency = 312 * 1000,       .index = 900 * 1000},
-		{.frequency = 504 * 1000,       .index = 925 * 1000},
+		{.frequency = 312 * 1000,       .index = 925 * 1000},
+		{.frequency = 504 * 1000,       .index = 950 * 1000},
 #if defined(CONFIG_MALATA_D7806)
 		{.frequency = 816 * 1000,       .index = 1025 * 1000},
 #else
@@ -3874,7 +3929,11 @@ static struct cpufreq_frequency_table dvfs_arm_table[] = {
 #endif
 		{.frequency = 1008 * 1000,      .index = 1075 * 1000},
 		{.frequency = 1200 * 1000,      .index = 1200 * 1000},
+#if defined(CONFIG_MALATA_D1013)
+		{.frequency = 1416 * 1000,      .index = 1300 * 1000},
+#else
 		{.frequency = 1416 * 1000,      .index = 1250 * 1000},
+#endif
         {.frequency = 1608 * 1000,      .index = 1350 * 1000},
         {.frequency = CPUFREQ_TABLE_END},
 };

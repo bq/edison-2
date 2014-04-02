@@ -22,6 +22,7 @@
 #include <linux/device.h>
 #include <linux/key.h>
 #include <linux/times.h>
+#include <linux/delay.h>
 #include <linux/posix-timers.h>
 #include <linux/security.h>
 #include <linux/dcookies.h>
@@ -40,6 +41,7 @@
 #include <linux/syscore_ops.h>
 #include <linux/version.h>
 #include <linux/ctype.h>
+#include <mach/gpio.h>
 
 #include <linux/compat.h>
 #include <linux/syscalls.h>
@@ -69,6 +71,9 @@
 extern void rk29_backlight_set(bool on);
 #endif
 
+#ifdef CONFIG_SND_SOC_RT5616
+extern unsigned int rt5616_codec_spk_io;
+#endif
 #ifdef CONFIG_FB_ROCKCHIP
 extern int rk_fb_io_disable(void);
 #endif
@@ -358,6 +363,7 @@ void kernel_restart(char *cmd)
 	restart_dbg("%s->%d->cmd=%s",__FUNCTION__,__LINE__,cmd);
 #ifdef CONFIG_BACKLIGHT_RK29_BL
 	rk29_backlight_set(0);
+	msleep(100);
 #endif
 
 #ifdef CONFIG_FB_ROCKCHIP
@@ -406,12 +412,23 @@ EXPORT_SYMBOL_GPL(kernel_halt);
  */
 void kernel_power_off(void)
 {
+#ifdef CONFIG_SND_SOC_RT5616
+	if (rt5616_codec_spk_io)
+		gpio_direction_output(rt5616_codec_spk_io, GPIO_LOW);
+	msleep(50);
+#endif
+
 #ifdef CONFIG_BACKLIGHT_RK29_BL
-//	rk29_backlight_set(0);
+#if defined(CONFIG_MALATA_D7022)
+	rk29_backlight_set(0);
+	msleep(100);
+#endif
 #endif
 
 #ifdef CONFIG_FB_ROCKCHIP
-//	rk_fb_io_disable();
+#if defined(CONFIG_MALATA_D7022)
+	rk_fb_io_disable();
+#endif
 #endif
 
 	kernel_shutdown_prepare(SYSTEM_POWER_OFF);

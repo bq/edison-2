@@ -32,7 +32,7 @@
 #endif
 #include <linux/sensor-dev.h>
 
-#define SENSOR_I2C_RATE 200*1000
+#define SENSOR_I2C_RATE 100*1000
 
 
 static int sensor_i2c_write(struct i2c_adapter *i2c_adap,

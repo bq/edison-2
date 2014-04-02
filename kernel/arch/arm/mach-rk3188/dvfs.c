@@ -92,7 +92,11 @@ static struct lkg_maxvolt lkg_volt_table[] = {
 #else
 /* avdd_com & vdd_arm short circuit */
 static struct lkg_maxvolt lkg_volt_table[] = {
+#if defined(CONFIG_MALATA_D1013) || defined(CONFIG_MALATA_D7806)
+	{.leakage_level = 3,	.maxvolt = 1400 * 1000},
+#else
 	{.leakage_level = 3,	.maxvolt = 1350 * 1000},
+#endif
 	{.leakage_level = 5,	.maxvolt = 1300 * 1000},
 	{.leakage_level = 15,	.maxvolt = 1250 * 1000},
 };
@@ -135,6 +139,17 @@ void dvfs_adjust_table_lmtvolt(struct clk *clk, struct cpufreq_frequency_table *
 			}
 		}
 	}
+
+	if (strncmp(clk->dvfs_info->name, "cpu", strlen("cpu")) == 0 && leakage_level <= 2) {
+		for (i = 0; table[i].frequency != CPUFREQ_TABLE_END; i++) {
+			if(clk_round_rate(clk,table[i].frequency*KHZ) == 1608*MHZ){
+				printk("\t\tadjust table freq=%d KHz, index=%d mV", table[i].frequency, table[i].index);
+				table[i].index = 1400 * 1000;
+				printk(" to index=%d mV\n", table[i].index);
+			}
+		}
+	}
+
 	// limit high voltage
 	for (i = 0; table[i].frequency != CPUFREQ_TABLE_END; i++) {
 		if (table[i].index > maxvolt) {

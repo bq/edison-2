@@ -66,7 +66,7 @@ if SDMMC_RK29
 			
        config  RK29_SDIO_IRQ_FROM_GPIO
          bool "sdio-irq from gpio"
-         default n
+         default y
          depends on SDMMC1_RK29
          help
             You will generate sdio interrupt from gpio if you say Yes.

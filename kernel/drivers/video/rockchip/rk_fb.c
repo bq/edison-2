@@ -1455,7 +1455,7 @@ int rk_fb_register(struct rk_lcdc_device_driver *dev_drv,
     	}
     	lcdc_id = i;
 	init_lcdc_device_driver(dev_drv, def_drv,id);
-	mdelay(20);
+//	mdelay(50);
 	dev_drv->init_lcdc(dev_drv);
 	/************fb set,one layer one fb ***********/
 	dev_drv->fb_index_base = fb_inf->num_fb;
@@ -1553,7 +1553,7 @@ int rk_fb_register(struct rk_lcdc_device_driver *dev_drv,
 #ifdef CONFIG_MALATA_D7803_Q7
                        fb_show_logo(fb_inf->fb[0], FB_ROTATE_CW);
 #else
-			fb_show_logo(fb_inf->fb[0], FB_ROTATE_UR);
+		fb_show_logo(fb_inf->fb[0], FB_ROTATE_UR);
 #endif
 #endif
 			fb_inf->fb[0]->fbops->fb_pan_display(&(fb_inf->fb[0]->var), fb_inf->fb[0]);

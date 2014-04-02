@@ -1,0 +1,30 @@
+#
+# Magnetometer sensors
+#
+
+menuconfig KIONIX_KMX61G
+	bool "Kionix kmx61G Sensors"
+      default n	
+	help
+	  Say Y here, and a list of Magnetometer sensors drivers will be displayed.
+	  Everything that didn't fit into the other categories is here. This option
+	  doesn't affect the kernel.
+
+	  If unsure, say Y.
+
+if KIONIX_KMX61G
+
+config KIONIX_KMX61G_SENSOR
+ 	bool "KIONIX KMX61G 9-Axis sensor"
+	depends on I2C
+	default n
+       help 
+        If you say yes here you get support for the Kionix digital 3-axis 
+        accelerometer. 
+
+        This driver can also be built as a module. If so, the module will be 
+        called kionix_accel. 
+        
+endif
+
+

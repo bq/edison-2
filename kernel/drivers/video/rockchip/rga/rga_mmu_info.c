@@ -417,11 +417,16 @@ static int rga_mmu_info_BitBlt_mode(struct rga_reg *reg, struct rga_req *req)
         if(SrcMemSize == 0) {
             return -EINVAL;                
         }
-      
+         #if 1
         /* cal dst buf mmu info */    
         DstMemSize = rga_buf_size_cal(req->dst.yrgb_addr, req->dst.uv_addr, req->dst.v_addr,
+                                        req->dst.format, req->dst.vir_w, req->dst.vir_h,
+                                        &DstStart);
+	#else
+	 DstMemSize = rga_buf_size_cal(req->dst.yrgb_addr, req->dst.uv_addr, req->dst.v_addr,
                                         req->dst.format, req->dst.vir_w, req->dst.act_h + req->dst.y_offset,
                                         &DstStart);        
+	#endif
         if(DstMemSize == 0) {
             return -EINVAL; 
         }

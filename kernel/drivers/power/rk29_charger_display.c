@@ -62,9 +62,10 @@ extern bool low_usb_charging(void);
 
 static struct workqueue_struct *wq_charge_test;
 static struct delayed_work delaywork_charge_test;
-static struct wake_lock charge_lock;
 extern bool is_usbcharging(void);
-
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+int check_charge_ok = 0;
+#endif
 static int __init pwr_on_thrsd_setup(char *str)
 {
 
@@ -186,11 +187,9 @@ static void add_bootmode_charger_to_cmdline(void)
 	char *pmode=" androidboot.mode=charger";
 	//int off = strlen(saved_command_line);
 	char *new_command_line = kzalloc(strlen(saved_command_line) + strlen(pmode) + 1, GFP_KERNEL);
-#if defined (CONFIG_BATTERY_RK30_USB_CHARGE)
-	if(is_usbcharging())
-		wake_lock(&charge_lock);
-#endif
+
 	sprintf(new_command_line, "%s%s", saved_command_line, pmode);
+	original_command_line = saved_command_line;
 	saved_command_line = new_command_line;
 	//strcpy(saved_command_line+off,pmode);
 
@@ -211,9 +210,7 @@ static int  __init start_charge_logo_display(void)
 	union power_supply_propval val_capacity ={ 100} ;
 
 	printk("start_charge_logo_display\n");
-#if defined (CONFIG_BATTERY_RK30_USB_CHARGE)
-	wake_lock_init(&charge_lock,WAKE_LOCK_SUSPEND,"charge_lock");
-#endif
+
 	if(board_boot_mode() == BOOT_MODE_RECOVERY)  //recovery mode
 	{
 		printk("recovery mode \n");
@@ -268,6 +265,10 @@ static int  __init start_charge_logo_display(void)
 			printk("power in charge mode\n");
 		}
 	}
+
+#if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
+	 check_charge_ok = 1;
+#endif
 
 	return 0;
 } 

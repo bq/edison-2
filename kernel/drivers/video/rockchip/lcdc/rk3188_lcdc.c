@@ -422,7 +422,11 @@ static int rk3188_lcdc_init(struct rk_lcdc_device_driver *dev_drv)
 	
 	lcdc_cfg_done(lcdc_dev);  // write any value to  REG_CFG_DONE let config become effective
 
-//	rk3188_lcdc_clk_disable(lcdc_dev);
+#if defined(CONFIG_MALATA_D1014) || defined(CONFIG_MALATA_D1013)
+	//do nothing
+#else
+	rk3188_lcdc_clk_disable(lcdc_dev);
+#endif
 	
 	return 0;
 }
@@ -498,9 +502,15 @@ static int rk3188_load_screen(struct rk_lcdc_device_driver *dev_drv, bool initsc
 			break;
 		case OUT_D888_P666:
 			face = OUT_P888;
+#ifndef CONFIG_MALATA_D1013
 			lcdc_msk_reg(lcdc_dev, DSP_CTRL0, m_DITHER_DOWN_EN | m_DITHER_DOWN_MODE |
 				m_DITHER_DOWN_SEL, v_DITHER_DOWN_EN(1) | v_DITHER_DOWN_MODE(1) |
 				v_DITHER_DOWN_SEL(1));
+#else
+			lcdc_msk_reg(lcdc_dev, DSP_CTRL0, m_DITHER_DOWN_EN | m_DITHER_DOWN_MODE |
+				m_DITHER_DOWN_SEL, v_DITHER_DOWN_EN(1) | v_DITHER_DOWN_MODE(1) |
+				v_DITHER_DOWN_SEL(0));
+#endif
 			break;
 		case OUT_P888:
 			face = OUT_P888;

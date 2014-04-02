@@ -61,6 +61,21 @@ int rkwifi_set_firmware(char *fw, char *nvram)
 	sprintf(nvram, "%s%s", ANDROID_FW_PATH, "nvram_AP6210.txt");
 #endif
 
+#ifdef CONFIG_AP6234
+    sprintf(fw, "%s%s", ANDROID_FW_PATH, "fw_bcm43341b0_ag.bin");
+	sprintf(nvram, "%s%s", ANDROID_FW_PATH, "nvram_AP6234.txt");
+#endif
+
+#ifdef CONFIG_AP6335
+    sprintf(fw, "%s%s", ANDROID_FW_PATH, "fw_bcm4339a0_ag.bin");
+	sprintf(nvram, "%s%s", ANDROID_FW_PATH, "nvram_AP6335.txt");
+#endif
+
+#ifdef CONFIG_AP6441
+    sprintf(fw, "%s%s", ANDROID_FW_PATH, "fw_bcm43341b0_ag.bin");
+	sprintf(nvram, "%s%s", ANDROID_FW_PATH, "nvram_AP6441.txt");
+#endif
+
 #ifdef CONFIG_AP6476
     sprintf(fw, "%s%s", ANDROID_FW_PATH, "fw_RK901.bin");
 	sprintf(nvram, "%s%s", ANDROID_FW_PATH, "nvram_AP6476.txt");

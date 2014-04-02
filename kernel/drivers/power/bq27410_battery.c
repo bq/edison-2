@@ -97,7 +97,7 @@ extern void rk30_bat_unregister(void);
 #if defined(CONFIG_CHARGER_LIMITED_BY_TEMP)
 extern void bq24196_charge_disable(void);
 extern void bq24196_charge_en(void);
-static int charge_en_flags = 0;
+int charge_en_flags = 0;
 #endif
 
 extern volatile bool low_usb_charge;
@@ -982,6 +982,8 @@ static int bq27410_update_fw(struct file *filp,  char *buff, unsigned long len, 
 				//printk("\n W count = %d , wCount=%d\n", count, wCount);
 				ret = bq27410_write(g_client,buf[1],&buf[2],wCount - 2);
 				//printk("W ret =%d ", ret);
+				if(ret < 0)
+					break;
 			}
 			else if(*pch == 'X')
 			{
@@ -1066,6 +1068,8 @@ static int bq27410_update_fw(struct file *filp,  char *buff, unsigned long len, 
 				//printk("\n C count = %d , cCount=%d\n", count, cCount);
 				ret = bq27410_read(g_client,buf[1],&buf[2],cCount - 2);
 				//printk("C ret =%d ", ret);
+				if(ret < 0)
+					break;
 			}
 		}
 	}
@@ -1077,7 +1081,7 @@ static int bq27410_update_fw(struct file *filp,  char *buff, unsigned long len, 
 	///Close file
 	update_file_close(file_data, old_fs);
 
-	return 0;
+	return ret;
 }
 
 static int bq27410_update_flash_data(struct file *filp, const char __user *buff, unsigned long len, void *data)
@@ -1090,8 +1094,8 @@ static int bq27410_update_flash_data(struct file *filp, const char __user *buff,
 	ret = bq27410_read(g_client,0x66,buf,2);
 	if(ret < 0)
 		bq27410_update_flag = 1;
-
-	ret = bq27410_update_fw(filp, buff, len, data);
+	else
+		ret = bq27410_update_fw(filp, buff, len, data);
 
 	g_bq27410_mode = BQ27410_NORMAL_MODE;
 	g_client->addr = 0x55;
@@ -1124,11 +1128,12 @@ static int bq27410_update_write(struct file *filp, const char __user *buff, unsi
 	mutex_lock(&g_bq27410_mutex);
 
 	printk("update file: %d-[%s].\n", len, update_file);
-	ret = bq27410_update_flash_data(filp, update_file, len, data);
-	if(ret)
+	if(bq27410_update_flash_data(filp, update_file, len, data) < 0)
+		ret = bq27410_update_flash_data(filp, update_file, len, data);
+
 	mutex_unlock(&g_bq27410_mutex);
 
-	if(ret == 0)
+	if(ret)
 	{
 		//after update firmware ,restart the system.
 		printk("%s,after update firmware ,restart the system.\n", __FUNCTION__);
@@ -1284,17 +1289,17 @@ static int bq27410_battery_probe(struct i2c_client *client,
 	battery_capacity_check(di);
 	if(g_bq27410_mode == BQ27410_NORMAL_MODE){
 
-		if(!bq27410_read_control_status(client))
-		{
-			virtual_battery_enable = 1;
+//		if(!bq27410_read_control_status(client))
+//		{
+//			virtual_battery_enable = 1;
 
-			bq27410_powersupply_init(di);
-			retval = power_supply_register(&client->dev, &di->bat);
+//			bq27410_powersupply_init(di);
+//			retval = power_supply_register(&client->dev, &di->bat);
 
-			INIT_DELAYED_WORK(&di->update_work, bq27410_battery_update_work);
-			schedule_delayed_work(&di->update_work, msecs_to_jiffies(15 * 1000));
-		}
-		else{
+//			INIT_DELAYED_WORK(&di->update_work, bq27410_battery_update_work);
+//			schedule_delayed_work(&di->update_work, msecs_to_jiffies(15 * 1000));
+//		}
+//		else{
 			printk("NOT need bq27410_update_firmware \n");
 			bq27410_powersupply_init(di);
 			
@@ -1306,7 +1311,7 @@ static int bq27410_battery_probe(struct i2c_client *client,
 			INIT_DELAYED_WORK(&di->work, bq27410_battery_work);
 			schedule_delayed_work(&di->work, di->interval);
 			dev_info(&client->dev, "support ver. %s enabled\n", DRIVER_VERSION);
-		}
+//		}
 	}
 	else
 	{

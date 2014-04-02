@@ -105,11 +105,10 @@ static inline void rk29_bl_max_brightness_check(struct rk29_bl_info *rk29_bl_inf
 static int tmp_flag = 1;
 extern int tmp108_init;
 #endif
-
-
 int rk29_bl_val_scalor_line(struct rk29_bl_info *rk29_bl_info,int brightness)
 {
 	u32 k_bl_range,sys_bl_range,k_bl;
+
 #if defined (CONFIG_TMP108) && defined(CONFIG_MALATA_D8009)
 	if((1 == tmp108_init) && (1 == tmp_flag)){
 		rk29_bl_info->min_brightness = 20;

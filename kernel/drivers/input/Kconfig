@@ -192,6 +192,8 @@ source "drivers/input/gsensor/Kconfig"
 
 source "drivers/input/gyroscope/Kconfig"
 
+source "drivers/input/kionix_KMX61/Kconfig"
+
 source "drivers/input/jogball/Kconfig"
 
 source "drivers/input/lightsensor/Kconfig"

@@ -157,7 +157,7 @@ static ssize_t tmp108_check_show(struct device *dev,
 {
 	return sprintf(buf, "%u\n", tmp108_temp);
 }
-static DEVICE_ATTR(tmpcheck, 0666, tmp108_check_show, NULL);
+static DEVICE_ATTR(tmpcheck, 0664, tmp108_check_show, NULL);
 
 static int tmp108_sysfs_init(void)
 {
@@ -280,7 +280,7 @@ static int sensor_init(struct i2c_client *client)
 #endif
 
 	sensor->status_cur = SENSOR_OFF;
-    
+
 	return result;
 }
 

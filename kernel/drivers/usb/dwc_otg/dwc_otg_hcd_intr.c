@@ -1861,7 +1861,13 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t *_hcd,
 				  "for halting is unknown, hcint 0x%08x, intsts 0x%08x\n",
 				  __func__, _hc->hc_num, hcint.d32,
 				  dwc_read_reg32(&_hcd->core_if->core_global_regs->gintsts));
-				clear_hc_int(_hc_regs,chhltd);
+				//clear_hc_int(_hc_regs,chhltd);
+				/* Release the host channel for use by other transfers. The cleanup
+				 * function clears the channel interrupt enables and conditions, so
+				 * there's no need to clear the Channel Halted interrupt separately.
+				 */
+				dwc_otg_hc_cleanup(_hcd->core_if, _hc);
+				list_add_tail(&_hc->hc_list_entry, &_hcd->free_hc_list);
 		}
 	}
 }

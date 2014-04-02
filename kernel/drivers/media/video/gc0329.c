@@ -21,7 +21,6 @@ o* Driver for MT9M001 CMOS Image Sensor from Micron
 #include <media/v4l2-chip-ident.h>
 #include <media/soc_camera.h>
 #include <plat/rk_camera.h>
-
 static int debug;
 module_param(debug, int, S_IRUGO|S_IWUSR);
 
@@ -116,6 +115,8 @@ static struct reginfo sensor_init_data[] =
 	{0xf1, 0x01},
        #if defined(CONFIG_CAMERA_EMI_ENABLE)
        {0xfa,0x11},
+       #else
+	  {0xfa,0x00}, 
        #endif
 	  #if defined(CONFIG_MALATA_D8009)
        {0xfa,0x11},
@@ -1135,7 +1136,6 @@ static struct reginfo *sensor_FlipSeqe[] = {sensor_FlipOff, sensor_FlipOn,NULL,}
 #if CONFIG_SENSOR_Scene
 static  struct reginfo sensor_SceneAuto[] =
 {
-	{0xfa,0x00},
 	{0xfe, 0x01},
 	{0x33, 0x20},
 	{0xfe, 0x00},
@@ -1144,7 +1144,6 @@ static  struct reginfo sensor_SceneAuto[] =
 
 static  struct reginfo sensor_SceneNight[] =
 {
-	{0xfa,0x00},
 	{0xfe, 0x01},
 	{0x33, 0x30},
 	{0xfe, 0x00},
@@ -3184,7 +3183,6 @@ module_exit(sensor_mod_exit);
 MODULE_DESCRIPTION(SENSOR_NAME_STRING(Camera sensor driver));
 MODULE_AUTHOR("ddl <kernel@rock-chips>");
 MODULE_LICENSE("GPL");
-
 
 
 

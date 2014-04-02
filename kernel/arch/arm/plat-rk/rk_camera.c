@@ -2028,6 +2028,10 @@ static int rk_sensor_io_init(void)
 		gpio_request(RK30_PIN1_PA6, "camera power");
 		gpio_direction_output(RK30_PIN1_PA6,0);
 		#endif
+		#if defined(CONFIG_MALATA_D1015)
+		gpio_request(RK30_PIN2_PD4, "camera power");
+		gpio_direction_output(RK30_PIN2_PD4,0);
+		#endif
 	}
     
     if (sensor_ioctl_cb.sensor_power_cb == NULL)
