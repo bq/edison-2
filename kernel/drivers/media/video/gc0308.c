@@ -59,12 +59,12 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_Brightness	0
 #define CONFIG_SENSOR_Contrast      0
 #define CONFIG_SENSOR_Saturation    0
-#define CONFIG_SENSOR_Effect        1
+#define CONFIG_SENSOR_Effect        0
 #define CONFIG_SENSOR_Scene         0
 #define CONFIG_SENSOR_DigitalZoom   0
 #define CONFIG_SENSOR_Focus         0
-#define CONFIG_SENSOR_Exposure     1
-#define CONFIG_SENSOR_Flash         1
+#define CONFIG_SENSOR_Exposure     0
+#define CONFIG_SENSOR_Flash         0
 #define CONFIG_SENSOR_Mirror        0
 #define CONFIG_SENSOR_Flip          0
 
@@ -1861,22 +1861,22 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
         sensor->info_priv.winseqe_cur_addr  = (int)winseqe_set_addr;
 
 		if (sensor_fmt_capturechk(sd,mf) == true) {				    /* ddl@rock-chips.com : Capture */
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
 			if (sensor->info_priv.whiteBalance != 0) {
 				qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 				sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
 			}
 			sensor->info_priv.snap2preview = true;
 		} else if (sensor_fmt_videochk(sd,mf) == true) {			/* ddl@rock-chips.com : Video */
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
 			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
 			sensor->info_priv.video2preview = true;
 		} else if ((sensor->info_priv.snap2preview == true) || (sensor->info_priv.video2preview == true)) {
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
 			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
            // msleep(600);
@@ -2712,9 +2712,7 @@ static long sensor_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
     struct soc_camera_device *icd = client->dev.platform_data;
     struct sensor *sensor = to_sensor(client);
     int ret = 0;
-#if CONFIG_SENSOR_Flash	
     int i;
-#endif
     
 	SENSOR_DG("\n%s..%s..cmd:%x \n",SENSOR_NAME_STRING(),__FUNCTION__,cmd);
 	switch (cmd)

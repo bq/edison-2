@@ -41,6 +41,10 @@
      */
 
 #define FBPIXMAPSIZE	(1024 * 8)
+__weak int get_battery_status(void)
+{
+	return 0;
+}
 
 static DEFINE_MUTEX(registration_lock);
 struct fb_info *registered_fb[FB_MAX] __read_mostly;
@@ -499,8 +503,18 @@ static int fb_show_logo_line(struct fb_info *info, int rotate,
 		fb_set_logo(info, logo, logo_new, fb_logo.depth);
 	}
 
+#ifdef CONFIG_LOGO_LOWERPOWER_WARNING
+	if(1 == get_battery_status()){
+		image.dx = (info->var.xres/2)-(logo->width)/2;
+		image.dy = (info->var.yres/2)-(logo->height)/2;
+	}else{
+		image.dx = 0;
+		image.dy = y;
+	}
+#else
 	image.dx = 0;
 	image.dy = y;
+#endif
 	image.width = logo->width;
 	image.height = logo->height;
 
@@ -664,9 +678,19 @@ int fb_prepare_logo(struct fb_info *info, int rotate)
 int fb_show_logo(struct fb_info *info, int rotate)
 {
 	int y;
+#ifdef CONFIG_LOGO_LOWERPOWER_WARNING
+	if(1 ==  get_battery_status()){
+		y = fb_show_logo_line(info, rotate, fb_logo.logo, 0,
+				     1);
+	}else{
+		y = fb_show_logo_line(info, rotate, fb_logo.logo, 0,
+			      num_online_cpus());
 
+	}
+#else
 	y = fb_show_logo_line(info, rotate, fb_logo.logo, 0,
 			      num_online_cpus());
+#endif
 	y = fb_show_extra_logos(info, y, rotate);
 
 	return y;
@@ -1658,6 +1682,7 @@ static int do_unregister_framebuffer(struct fb_info *fb_info)
 	if (ret)
 		return -EINVAL;
 
+	unlink_framebuffer(fb_info);
 	if (fb_info->pixmap.addr &&
 	    (fb_info->pixmap.flags & FB_PIXMAP_DEFAULT))
 		kfree(fb_info->pixmap.addr);
@@ -1665,7 +1690,6 @@ static int do_unregister_framebuffer(struct fb_info *fb_info)
 	registered_fb[i] = NULL;
 	num_registered_fb--;
 	fb_cleanup_device(fb_info);
-	device_destroy(fb_class, MKDEV(FB_MAJOR, i));
 	event.info = fb_info;
 	fb_notifier_call_chain(FB_EVENT_FB_UNREGISTERED, &event);
 
@@ -1673,6 +1697,22 @@ static int do_unregister_framebuffer(struct fb_info *fb_info)
 	put_fb_info(fb_info);
 	return 0;
 }
+
+int unlink_framebuffer(struct fb_info *fb_info)
+{
+	int i;
+
+	i = fb_info->node;
+	if (i < 0 || i >= FB_MAX || registered_fb[i] != fb_info)
+		return -EINVAL;
+
+	if (fb_info->dev) {
+		device_destroy(fb_class, MKDEV(FB_MAJOR, i));
+		fb_info->dev = NULL;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(unlink_framebuffer);
 
 void remove_conflicting_framebuffers(struct apertures_struct *a,
 				     const char *name, bool primary)
@@ -1745,8 +1785,6 @@ void fb_set_suspend(struct fb_info *info, int state)
 {
 	struct fb_event event;
 
-	if (!lock_fb_info(info))
-		return;
 	event.info = info;
 	if (state) {
 		fb_notifier_call_chain(FB_EVENT_SUSPEND, &event);
@@ -1755,7 +1793,6 @@ void fb_set_suspend(struct fb_info *info, int state)
 		info->state = FBINFO_STATE_RUNNING;
 		fb_notifier_call_chain(FB_EVENT_RESUME, &event);
 	}
-	unlock_fb_info(info);
 }
 
 /**

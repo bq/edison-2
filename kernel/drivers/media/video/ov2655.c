@@ -7,7 +7,7 @@ o* Driver for MT9M001 CMOS Image Sensor from Micron
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#define lily_debug 0
+
 #include <linux/videodev2.h>
 #include <linux/slab.h>
 #include <linux/i2c.h>
@@ -21,11 +21,6 @@ o* Driver for MT9M001 CMOS Image Sensor from Micron
 #include <media/soc_camera.h>
 #include <plat/rk_camera.h>
 #include <linux/vmalloc.h>
-#if lily_debug
-#include <linux/proc_fs.h>
-struct i2c_client * g_client;
-#endif
-
 static int debug ;
 module_param(debug, int, S_IRUGO|S_IWUSR);
 
@@ -65,7 +60,7 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_Brightness	0
 #define CONFIG_SENSOR_Contrast      0
 #define CONFIG_SENSOR_Saturation    0
-#define CONFIG_SENSOR_Effect        1
+#define CONFIG_SENSOR_Effect        0
 #define CONFIG_SENSOR_Scene         1
 #define CONFIG_SENSOR_DigitalZoom   0
 #define CONFIG_SENSOR_Focus         0
@@ -101,7 +96,7 @@ struct reginfo
     u8 val;
 };
 
-static int open_first_time = 0;  // hhs_0417
+
 //flash off in fixed time to prevent from too hot , zyc
 struct  flash_timer{
     struct soc_camera_device *icd;
@@ -126,11 +121,11 @@ static struct reginfo sensor_init_data[] =
     {0x30b2, 0x24},
 
     {0x300e, 0x34},
-    {0x300f, 0xa6},  //  hhs_0418 a6
+    {0x300f, 0xa6},
     {0x3010, 0x81},
     {0x3082, 0x01},
     {0x30f4, 0x01},
-    {0x3090, 0x03},
+    {0x3090, 0x33},//0x3b},
     {0x3091, 0xc0},
     {0x30ac, 0x42},
 
@@ -246,10 +241,9 @@ static struct reginfo sensor_init_data[] =
     {0x3334, 0xf0},
     {0x3335, 0xf0},
     {0x3336, 0xf0},
-    {0x3337, 0x5e},
+    {0x3337, 0x40},
     {0x3338, 0x40},
-    {0x3339, 0x46},
-    
+    {0x3339, 0x40},
     {0x333a, 0x00},
     {0x333b, 0x00},
 
@@ -282,29 +276,29 @@ static struct reginfo sensor_init_data[] =
     {0x334e, 0xe8},
     {0x334f, 0x20},
 
-{0x3350,0x33},
-{0x3351,0x28},
-{0x3352,0x00},
-{0x3353,0x16},
-{0x3354,0x00},
-{0x3355,0x85},
-{0x3356,0x35},
-{0x3357,0x28},
-{0x3358,0x00},
-{0x3359,0x13},
-{0x335a,0x00},
-{0x335b,0x85},
-{0x335c,0x34},
-{0x335d,0x28},
-{0x335e,0x00},
-{0x335f,0x13},
-{0x3360,0x00},
-{0x3361,0x85},
-{0x3363,0x70},
-{0x3364,0x7f},
-{0x3365,0x00},
-{0x3366,0x00},
-{0x3362,0x90},
+    {0x3350, 0x37},//0x33},
+    {0x3351, 0x27},//0x28},
+    {0x3352, 0x00},
+    {0x3353, 0x16},
+    {0x3354, 0x00},
+    {0x3355, 0x85},
+    {0x3356, 0x35},
+    {0x3357, 0x28},
+    {0x3358, 0x00},
+    {0x3359, 0x13},
+    {0x335a, 0x00},
+    {0x335b, 0x85},
+    {0x335c, 0x37},//0x34},
+    {0x335d, 0x28},
+    {0x335e, 0x00},
+    {0x335f, 0x13},
+    {0x3360, 0x00},
+    {0x3361, 0x85},
+    {0x3363, 0x70},
+    {0x3364, 0x7f},
+    {0x3365, 0x00},
+    {0x3366, 0x00},
+    {0x3362, 0x90},
 
     {0x3301, 0xff},
     {0x338B, 0x11},
@@ -353,7 +347,6 @@ static struct reginfo sensor_uxga[] =
 {
 
     {0x300E, 0x34},
-    {0x300f, 0x26},  //  hhs_0418 a6
     {0x3011, 0x01},
     {0x3012, 0x00},
     {0x302a, 0x05},
@@ -397,8 +390,6 @@ static struct reginfo sensor_sxga[] =
 #if 1
    // {0x3086,0x01},  //sleep on
     {0x300E, 0x34},
-     {0x300f, 0xa6},  //  hhs_0418 a6
-     {0x3013, 0xf7},
     {0x3011, 0x00},
     {0x3012, 0x00},
     {0x302a, 0x05},
@@ -445,8 +436,6 @@ static struct reginfo sensor_svga[] =
 {
    // {0x3086,0x01},  //sleep on
     {0x300E, 0x34},
-    {0x300f, 0xa6},  //  hhs_0418 a6
-    {0x3013, 0xf7},
     {0x3011, 0x01},
     {0x3012, 0x10},
     {0x302a, 0x02},
@@ -489,8 +478,6 @@ static struct reginfo sensor_vga[] =
 {
  //   {0x3086,0x00},  //sleep off
     {0x300E, 0x34},
-    {0x300f, 0xa6},  //  hhs_0418 a6
-    {0x3013, 0xf7},
     {0x3011, 0x01},
     {0x3012, 0x10},
     {0x302a, 0x02},
@@ -532,8 +519,6 @@ static struct reginfo sensor_vga[] =
 static struct reginfo sensor_cif[] =
 {
     {0x300E, 0x34},
-    {0x300f, 0xa6},  //  hhs_0418 a6
-    {0x3013, 0xf7},
     {0x3011, 0x01},
     {0x3012, 0x10},
     {0x302a, 0x02},
@@ -574,8 +559,6 @@ static struct reginfo sensor_cif[] =
 static  struct reginfo sensor_qvga[] =
 {
     {0x300E, 0x34},
-    {0x300f, 0xa6},  //  hhs_0418 a6
-    {0x3013, 0xf7},
     {0x3011, 0x01},
     {0x3012, 0x10},
     {0x302a, 0x02},
@@ -617,8 +600,6 @@ static  struct reginfo sensor_qvga[] =
 static struct reginfo sensor_qcif[] =
 {
 	{0x300E, 0x34},
-	{0x300f, 0xa6},  //  hhs_0418 a6
-	{0x3013, 0xf7},
     {0x3011, 0x01},
     {0x3012, 0x10},
     {0x302a, 0x02},
@@ -1243,7 +1224,7 @@ static struct reginfo sensor_Zoom3[] =
 };
 static struct reginfo *sensor_ZoomSeqe[] = {sensor_Zoom0, sensor_Zoom1, sensor_Zoom2, sensor_Zoom3, NULL,};
 #endif
-static const struct v4l2_querymenu sensor_menus[] =
+static struct v4l2_querymenu sensor_menus[] =
 {
 	#if CONFIG_SENSOR_WhiteBalance
     { .id = V4L2_CID_DO_WHITE_BALANCE,  .index = 0,  .name = "auto",  .reserved = 0, }, {  .id = V4L2_CID_DO_WHITE_BALANCE,  .index = 1, .name = "incandescent",  .reserved = 0,},
@@ -1313,7 +1294,7 @@ static  struct v4l2_queryctrl sensor_controls[] =
         .minimum	= 0,
         .maximum	= 6,
         .step		= 1,
-        .default_value = 3,
+        .default_value = 0,
     },
 	#endif
 
@@ -1772,9 +1753,9 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
 	const struct v4l2_queryctrl *qctrl;
     const struct sensor_datafmt *fmt;
     char value;
-    int ret,pid = 0,i = 0,j=0;
+    int ret,pid = 0,i = 0,j=0,tmp_winseq_size;
     struct rk29camera_platform_data* tmp_plat_data =sensor->sensor_io_request;
-    open_first_time = 1; // hhs_0417
+    
     sensor_init_data_p = sensor_init_data;
 	sensor_init_winseq_p = sensor_vga;
 	sensor_init_width = 640;
@@ -1812,7 +1793,7 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
         	}
 	    }
 		//init winseq
-		int tmp_winseq_size = tmp_plat_data->sensor_init_data[i]->rk_sensor_winseq_size;
+		tmp_winseq_size = tmp_plat_data->sensor_init_data[i]->rk_sensor_winseq_size;
         if(tmp_winseq_size > 2){
             	if(sizeof(struct reginfo) != sizeof(struct reginfo_t)){
             		if(sensor_init_winseq_board) {
@@ -1969,8 +1950,7 @@ sensor_INIT_ERR:
 
 static int sensor_deactivate(struct i2c_client *client)
 {
-	struct soc_camera_device *icd = client->dev.platform_data;
-	u8 reg_val;
+	struct soc_camera_device *icd = client->dev.platform_data;	
     struct sensor *sensor = to_sensor(client);
 	SENSOR_DG("\n%s..%s.. Enter\n",SENSOR_NAME_STRING(),__FUNCTION__);
     
@@ -2113,7 +2093,7 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
 	struct soc_camera_device *icd = client->dev.platform_data;
     struct reginfo *winseqe_set_addr=NULL;
     int ret=0, set_w,set_h;
-    char agc_value = 0;
+
 	fmt = sensor_find_datafmt(mf->code, sensor_colour_fmts,
 				   ARRAY_SIZE(sensor_colour_fmts));
 	if (!fmt) {
@@ -2225,26 +2205,7 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
                 SENSOR_DG("%s flash off in preivew!\n", SENSOR_NAME_STRING());
             }
         }
-        #endif 
-	if(winseqe_set_addr == sensor_uxga)
-	{
-		sensor_read(client,0x3000,&agc_value);
-		if(agc_value & 0xf0)
-		{
-			if(agc_value & 0x80)
-			    agc_value = agc_value & 0x7f;
-			else if (agc_value & 0x40)
-				agc_value =agc_value & 0xbf;
-			else if(agc_value & 0x20)
-				agc_value = agc_value & 0xdf;
-			else
-				agc_value = agc_value & 0xef;
-		}
-		else
-			agc_value = 0;
-		sensor_write(client,0x3013,0xf2);
-		sensor_write(client,0x3000,agc_value);
-	}
+        #endif        
         ret |= sensor_write_array(client, winseqe_set_addr);
         if (ret != 0) {
             SENSOR_TR("%s set format capability failed\n", SENSOR_NAME_STRING());
@@ -2283,11 +2244,6 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
             msleep(600);
 			sensor->info_priv.video2preview = false;
 			sensor->info_priv.snap2preview = false;
-		}
-		if (open_first_time == 1)  // hhs_0417
-		{
-			msleep(600);
-			open_first_time=0;
 		}
         SENSOR_DG("\n%s..%s.. icd->width = %d.. icd->height %d\n",SENSOR_NAME_STRING(),__FUNCTION__,set_w,set_h);
     }
@@ -2658,7 +2614,7 @@ static int sensor_set_flash(struct soc_camera_device *icd, const struct v4l2_que
 {    
     if ((value >= qctrl->minimum) && (value <= qctrl->maximum)) {
         if (value == 3) {       /* ddl@rock-chips.com: torch */
-            sensor_ioctrl(icd, Sensor_Flash, Flash_Torch_On);   /* Flash On */
+            sensor_ioctrl(icd, Sensor_Flash, Flash_Torch);   /* Flash On */
         } else {
             sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
         }
@@ -3233,71 +3189,6 @@ static struct v4l2_subdev_ops sensor_subdev_ops = {
 	.core	= &sensor_subdev_core_ops,
 	.video = &sensor_subdev_video_ops,
 };
-#if lily_debug
-int ov5642_write_proc (struct file *file, const char *buffer,
-                      unsigned long count, void *data)
-{
-	char kbuf[14]={0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-		char vol[10]={0,0,0,0,0,0,0,0,0,0};
-		char v[4]={0,0,0,0};
-	unsigned long totime;
-	unsigned short vol2=0;
-	unsigned short offset = 0;
-	int32_t rc = 0;
-	unsigned short vol1=0;
-	//u16 reg = 0;
-	char  val = 0;
-	struct clk *clk = NULL;
-	char value;
-
-	if (count >= 14)
-		return -EINVAL;
-	if (copy_from_user(kbuf, buffer, count))
-		return -EFAULT;
-	
-	if ('w' == kbuf[0]) {
-		memcpy(vol, kbuf+1, 4);
-		offset = (unsigned short) simple_strtoul(vol, NULL, 16);
-		memcpy(v,kbuf+5,2);
-		value = (u8) simple_strtoul(v,NULL,16);
-		sensor_write(g_client, offset, value);
-		printk("honghaishen_test %x %x \n ",offset ,value);
-	
-	}
-	else if('r'==kbuf[0])
-		{
-		memcpy(vol, kbuf+1, 4);
-		offset = (unsigned short) simple_strtoul(vol, NULL, 16);
-		sensor_read(g_client,offset,&val);
-		printk("honghaishen_test read val is %x \n",val);
-		}
-	else if('i'==kbuf[0])
-		{
-		 sensor_write_array(g_client, sensor_init_data);
-		}
-	
-	return count;
-}
-int ov5642_read_proc (char *buffer, char **buffer_location, off_t offset,
-                            int buffer_length, int *zero, void *ptr)
-{
-
-	if(offset > 0)
-		return 0;
-	return offset;
-}
-static void create_ov5642_proc_file(void)
-{
-	struct proc_dir_entry *ov5642_proc_file =
-		create_proc_entry("ov5642", 0666, NULL);
-
-	if (ov5642_proc_file) {
-		ov5642_proc_file->read_proc = ov5642_read_proc;
-		ov5642_proc_file->write_proc = ov5642_write_proc;
-	} else
-		printk(KERN_NOTICE "lily:(%d)%s:proc file create failed! \n",__LINE__,__func__);
-}
-#endif
 
 static int sensor_probe(struct i2c_client *client,
 			 const struct i2c_device_id *did)
@@ -3307,18 +3198,12 @@ static int sensor_probe(struct i2c_client *client,
     struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
     struct soc_camera_link *icl;
     int ret;
-#if lily_debug
-   g_client = client;
-#endif
 
     SENSOR_DG("\n%s..%s..%d..\n",__FUNCTION__,__FILE__,__LINE__);
     if (!icd) {
         dev_err(&client->dev, "%s: missing soc-camera data!\n",SENSOR_NAME_STRING());
         return -EINVAL;
     }
-	#if lily_debug
-	create_ov5642_proc_file();
-	#endif
 
     icl = to_soc_camera_link(icd);
     if (!icl) {

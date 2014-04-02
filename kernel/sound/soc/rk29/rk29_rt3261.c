@@ -1,7 +1,7 @@
 /*
- * rk29_rt5625.c  --  SoC audio for rockchip
+ * rk29_rt3261.c  --  SoC audio for rockchip
  *
- * Driver for rockchip rt5625 audio
+ * Driver for rockchip rt3261 audio
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -24,7 +24,8 @@
 #include "rk29_pcm.h"
 #include "rk29_i2s.h"
 
-#if 1
+
+#if 0
 #define	DBG(x...)	printk(KERN_INFO x)
 #else
 #define	DBG(x...)
@@ -98,16 +99,17 @@ static int rk29_hw_params(struct snd_pcm_substream *substream,
 	DBG("Enter:%s, %d, rate=%d\n", __FUNCTION__, __LINE__, params_rate(params));
 
 	/*Set the system clk for codec*/
-	ret = snd_soc_dai_set_sysclk(codec_dai, 0, pll_out, SND_SOC_CLOCK_IN);
+	snd_soc_dai_set_pll(codec_dai, 0, RT3261_PLL1_S_MCLK, pll_out, pll_out*2); //bard 8-29
+	ret = snd_soc_dai_set_sysclk(codec_dai, RT3261_SCLK_S_PLL1, pll_out*2, SND_SOC_CLOCK_IN); //bard 8-29
 	if (ret < 0)
 	{
-		       DBG("rk29_hw_params_rt5625:failed to set the sysclk for codec side\n"); 
+		DBG("rk29_hw_params_rt3261:failed to set the sysclk for codec side\n"); 
 		return ret;
 	}
 
 	snd_soc_dai_set_sysclk(cpu_dai, 0, pll_out, 0);
 	snd_soc_dai_set_clkdiv(cpu_dai, ROCKCHIP_DIV_BCLK, (pll_out/4)/params_rate(params)-1);
-	snd_soc_dai_set_clkdiv(cpu_dai, ROCKCHIP_DIV_MCLK, 3);
+	snd_soc_dai_set_clkdiv(cpu_dai, ROCKCHIP_DIV_MCLK, 3);// 256k = 48-1  3M=3
 
 	DBG("Enter:%s, %d, pll_out/4/params_rate(params) = %d \n", __FUNCTION__, __LINE__, (pll_out/4)/params_rate(params));
  
@@ -125,19 +127,8 @@ static int rt3261_voice_hw_params(struct snd_pcm_substream *substream,
 
 	DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);    
        
-	/* set codec DAI configuration */
-	//#if defined (CONFIG_SND_CODEC_SOC_SLAVE) 
-	DBG("Enter::%s----codec slave\n",__FUNCTION__);
-
 	ret = snd_soc_dai_set_fmt(codec_dai, SND_SOC_DAIFMT_DSP_A |
-				SND_SOC_DAIFMT_IB_NF | SND_SOC_DAIFMT_CBS_CFS);
-	/*#endif
-	//#if defined (CONFIG_SND_CODEC_SOC_MASTER) 
-	DBG("Enter::%s----codec master\n",__FUNCTION__);
-
-	ret = snd_soc_dai_set_fmt(codec_dai, SND_SOC_DAIFMT_DSP_A |
-		SND_SOC_DAIFMT_IB_NF | SND_SOC_DAIFMT_CBM_CFM ); 
-	#endif*/
+		SND_SOC_DAIFMT_IB_NF | SND_SOC_DAIFMT_CBS_CFS ); 
 
 	switch(params_rate(params)) {
 		case 8000:
@@ -158,18 +149,98 @@ static int rt3261_voice_hw_params(struct snd_pcm_substream *substream,
 			break;
 	}
 
-	//snd_soc_dai_set_pll(codec_dai, RT5625_PLL_MCLK_TO_VSYSCLK, 0, pll_out, 24576000);???????
+	DBG("Enter:%s, %d, rate=%d\n", __FUNCTION__, __LINE__, params_rate(params));
 
 	/*Set the system clk for codec*/
-	ret = snd_soc_dai_set_sysclk(codec_dai, 0, 24576000, SND_SOC_CLOCK_IN);
+	snd_soc_dai_set_pll(codec_dai, 0, RT3261_PLL1_S_MCLK, pll_out, pll_out*2); //bard 8-29
+	ret = snd_soc_dai_set_sysclk(codec_dai, RT3261_SCLK_S_PLL1, pll_out*2, SND_SOC_CLOCK_IN); //bard 8-29
+
 
 	if (ret < 0) {
-		printk("rk29_hw_params_rt5625:failed to set the sysclk for codec side\n"); 
+		printk("rk29_hw_params_rt3261:failed to set the sysclk for codec side\n"); 
 		return ret;
 	}
 
-	ret = snd_soc_dai_set_sysclk(cpu_dai, 0, pll_out, 0);
+	snd_soc_dai_set_sysclk(cpu_dai, 0, pll_out, 0);
+	//snd_soc_dai_set_clkdiv(cpu_dai, ROCKCHIP_DIV_BCLK, (pll_out/4)/params_rate(params)-1);
+	//snd_soc_dai_set_clkdiv(cpu_dai, ROCKCHIP_DIV_MCLK, 3);
+
+	DBG("Enter:%s, %d, pll_out/4/params_rate(params) = %d \n", __FUNCTION__, __LINE__, (pll_out/4)/params_rate(params));
  
+	return 0;
+}
+
+static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
+	SND_SOC_DAPM_MIC("Mic Jack", NULL),
+	SND_SOC_DAPM_MIC("Headset Jack", NULL),	
+	SND_SOC_DAPM_SPK("Ext Spk", NULL),
+	SND_SOC_DAPM_HP("Headphone Jack", NULL),
+};
+
+static const struct snd_soc_dapm_route audio_map[]={
+
+	/* Mic Jack --> MIC_IN*/
+	{"micbias1", NULL, "Mic Jack"},
+	{"MIC1", NULL, "micbias1"},
+	
+	// HP MIC
+	{"micbias1", NULL, "Headset Jack"},
+	{"MIC3", NULL, "micbias1"},
+
+	{"Ext Spk", NULL, "SPOLP"},
+   	{"Ext Spk", NULL, "SPOLN"},
+   	{"Ext Spk", NULL, "SPORP"},
+      	{"Ext Spk", NULL, "SPORN"},
+
+	{"Headphone Jack", NULL, "HPOL"},
+	{"Headphone Jack", NULL, "HPOR"},
+} ;
+
+static const struct snd_kcontrol_new rk_controls[] = {
+	SOC_DAPM_PIN_SWITCH("Mic Jack"),
+	SOC_DAPM_PIN_SWITCH("Headset Jack"),
+	SOC_DAPM_PIN_SWITCH("Ext Spk"),
+	SOC_DAPM_PIN_SWITCH("Headphone Jack"),
+};
+
+/*
+ * Logic for a rt3261 as connected on a rockchip board.
+ */
+static int rk29_rt3261_init(struct snd_soc_pcm_runtime *rtd)
+{
+	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_dapm_context *dapm = &codec->dapm;
+
+	DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);
+
+	snd_soc_add_controls(codec, rk_controls,
+			ARRAY_SIZE(rk_controls));
+
+	/* Add specific widgets */
+	snd_soc_dapm_new_controls(dapm, rt3261_dapm_widgets,
+				  ARRAY_SIZE(rt3261_dapm_widgets));
+	/* Set up specific audio path audio_mapnects */
+	snd_soc_dapm_add_routes(dapm, audio_map, ARRAY_SIZE(audio_map));
+
+	snd_soc_dapm_enable_pin(dapm, "Mic Jack");
+	snd_soc_dapm_enable_pin(dapm, "Headset Jack");
+	snd_soc_dapm_enable_pin(dapm, "Ext Spk");
+	snd_soc_dapm_enable_pin(dapm, "Headphone Jack");
+#ifdef CONFIG_HDMI
+	extern int hdmi_is_insert(void);
+	extern void codec_set_spk(bool on);         
+	if(hdmi_is_insert())                 
+		codec_set_spk(false);
+#endif
+
+#ifdef CONFIG_HDMI_RK30
+	extern int hdmi_get_hotplug(void);
+	if(hdmi_get_hotplug() == 2/*HDMI_HPD_ACTIVED*/)
+		codec_set_spk(false);
+#endif
+
+	snd_soc_dapm_sync(dapm);
+
 	return 0;
 }
 
@@ -187,8 +258,13 @@ static struct snd_soc_dai_link rk29_dai[] = {
 		.stream_name = "RT3261 PCM",
 		.codec_name = "rt3261.0-001c",
 		.platform_name = "rockchip-audio",
-		.cpu_dai_name = "rk29_i2s.0",
+		#if defined(CONFIG_SND_RK29_SOC_I2S_8CH)    
+			.cpu_dai_name = "rk29_i2s.0",
+		#elif defined(CONFIG_SND_RK29_SOC_I2S_2CH)
+			.cpu_dai_name = "rk29_i2s.1",
+		#endif
 		.codec_dai_name = "rt3261-aif1",
+		.init = rk29_rt3261_init,
 		.ops = &rk29_ops,
 	},
 	{
@@ -196,7 +272,11 @@ static struct snd_soc_dai_link rk29_dai[] = {
 		.stream_name = "RT3261 PCM",
 		.codec_name = "rt3261.0-001c",
 		.platform_name = "rockchip-audio",
-		.cpu_dai_name = "rk29_i2s.0",
+		#if defined(CONFIG_SND_RK29_SOC_I2S_8CH)    
+			.cpu_dai_name = "rk29_i2s.0",
+		#elif defined(CONFIG_SND_RK29_SOC_I2S_2CH)
+			.cpu_dai_name = "rk29_i2s.1",
+		#endif 
 		.codec_dai_name = "rt3261-aif2",
 		.ops = &rt3261_voice_ops,
 	},

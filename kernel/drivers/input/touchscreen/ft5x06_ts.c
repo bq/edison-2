@@ -428,10 +428,10 @@ FTS_BOOL byte_read(FTS_BYTE* pbt_buf, FTS_BYTE bt_len)
 
 #define    FTS_PACKET_LENGTH        128
 
-/* touchscreen firmware for ft5606 10.1 inch project*/
+/* touchscreen firmware for ft5216 7 inch project*/
 static unsigned char CTPM_FW[]=
 {
-  #include "ft_app-ad.h"
+  #include "ft_app-78.h"
 };
 
 /* touchscreen firmware for ft5406 9 inch project*/
@@ -443,7 +443,7 @@ static unsigned char CTPM_FW2[]=
 /* touchscreen firmware for ft5406 7 inch project*/
 static unsigned char CTPM_FW3[]=
 {
-  #include "ft_app-54.h"
+  #include "ft_app-58.h"
 };
 
 /* touchscreen firmware for ft5406 8 inch project smb-d8005*/
@@ -1332,9 +1332,13 @@ ft5x0x_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	{
           /* compare to last version, if not equal,do update!*/  
 		    
-          #if (defined(CONFIG_MALATA_D7008))
-          	if(( uc_reg_value == 0x52))
+          #if (defined(CONFIG_MALATA_D7008)||defined(CONFIG_MALATA_C7022))
+          	if(( uc_reg_value < 0x58) && ( uc_reg_value > 0x50))
+          	 { 
+          	    /* 0x53 is a special version*/ 	
+		    if(uc_reg_value != 0x53)
 		    fts_ctpm_fw_upgrade_with_i_file3();
+		 }   
 		/* version is 0xa6 means upgrade failed last time */    
 		if( uc_reg_value == 0xa6)
 		    fts_ctpm_fw_upgrade_with_i_file3();	
@@ -1354,6 +1358,14 @@ ft5x0x_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		/* version is 0xa6 means upgrade failed last time */          
 		if( uc_reg_value == 0xa6)
 		    fts_ctpm_fw_upgrade_with_i_file2();	   
+          #endif
+          
+          #if (defined(CONFIG_MALATA_C7019A))
+          	if(( uc_reg_value < 0x78) && ( uc_reg_value > 0x70))
+		    fts_ctpm_fw_upgrade_with_i_file();	 
+		/* version is 0xa6 means upgrade failed last time */          
+		if( uc_reg_value == 0xa6)
+		    fts_ctpm_fw_upgrade_with_i_file();	   
           #endif
           
           

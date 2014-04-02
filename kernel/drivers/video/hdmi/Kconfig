@@ -23,16 +23,6 @@ config HDMI_DUAL_DISP
 
 #config HDMI_DEBUG
 #	bool "hdmi debug"
-choice
-	depends on RK610_HDMI
-	prompt "HDMI DEFAULT OUT"
-config HDMI_DEFAULT_OUT_HDMI
-	bool "default hdmi"
-config HDMI_DEFAULT_OUT_DVI
-	bool "default dvi"
-config HDMI_DEFAULT_OUT_DEPENDS_ON_EDID
-	bool "depends on edid"
-endchoice
 endif
 
 endmenu

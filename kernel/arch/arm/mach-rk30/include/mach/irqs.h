@@ -12,6 +12,8 @@
 #define IRQ_DMAC2_0                     RK30XX_IRQ(2)
 #define IRQ_DMAC2_1                     RK30XX_IRQ(3)
 #define IRQ_DDR_PCTL                    RK30XX_IRQ(4)
+#define IRQ_HSIC                        37
+#define IRQ_GPU                         39
 #define IRQ_GPU_GP                      RK30XX_IRQ(5)
 #define IRQ_GPU_MMU                     RK30XX_IRQ(6)
 #define IRQ_GPU_PP                      RK30XX_IRQ(7)
@@ -25,7 +27,7 @@
 #define IRQ_IPP                         RK30XX_IRQ(15)
 #define IRQ_USB_OTG                     RK30XX_IRQ(16)
 #define IRQ_USB_HOST                    RK30XX_IRQ(17)
-
+#define IRQ_GPS                         50
 #define IRQ_MAC                         RK30XX_IRQ(19)
 #define IRQ_I2S2_2CH                    RK30XX_IRQ(20)
 #define IRQ_TSADC                       RK30XX_IRQ(21)
@@ -86,13 +88,14 @@
 
 //hhb@rock-chips.com this spi is used for fiq_debugger signal irq
 #define IRQ_UART_SIGNAL			RK30XX_IRQ(80)
-#if CONFIG_RK_DEBUG_UART >= 0 && CONFIG_RK_DEBUG_UART < 4
-#define IRQ_DEBUG_UART			(IRQ_UART0 + CONFIG_RK_DEBUG_UART)
-#endif
+
+#define IRQ_ARM_PMU                     RK30XX_IRQ(103)
 
 #define NR_GIC_IRQS                     (5 * 32)
-#define NR_GPIO_IRQS                    (6 * 32)
+#define NR_GPIO_IRQS                    (7 * 32)
 #define NR_BOARD_IRQS                   64
 #define NR_IRQS                         (NR_GIC_IRQS + NR_GPIO_IRQS + NR_BOARD_IRQS)
+
+#define IRQ_BOARD_BASE                  (NR_GIC_IRQS + NR_GPIO_IRQS)
 
 #endif

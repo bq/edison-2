@@ -107,6 +107,48 @@ static void rk30_show_regs(struct rk30_i2c *i2c)
         for( i = 0; i < 8; i ++) 
                 dev_info(i2c->dev, "I2C_RXDATA%d: 0x%08x\n", i, i2c_readl(i2c->regs + I2C_RXDATA_BASE + i * 4));
 }
+
+static int rk30_i2c_check_idle(struct rk30_i2c *i2c)
+{
+	int ret = 0;
+	int sda_io, scl_io;
+	int sda_lev, scl_lev;
+
+	sda_io = iomux_mode_to_gpio(i2c->sda_mode);
+	scl_io = iomux_mode_to_gpio(i2c->scl_mode);
+
+	ret = gpio_request(sda_io, NULL);
+	if(unlikely(ret < 0)){
+		dev_err(i2c->dev, "Failed to request gpio: SDA_GPIO\n");
+		return ret;
+	}
+	ret = gpio_request(scl_io, NULL);
+	if(unlikely(ret < 0)){
+		dev_err(i2c->dev, "Failed to request gpio: SCL_GPIO\n");
+		gpio_free(sda_io);
+		return ret;
+	}
+	gpio_direction_input(sda_io);
+	gpio_direction_input(scl_io);
+
+	sda_lev = gpio_get_value(sda_io);
+	scl_lev = gpio_get_value(scl_io);
+
+	gpio_free(sda_io);
+	gpio_free(scl_io);
+
+	iomux_set(i2c->sda_mode);
+	iomux_set(i2c->scl_mode);
+
+	if(sda_lev == 1 && scl_lev == 1)
+		return I2C_IDLE;
+	else if(sda_lev == 0 && scl_lev == 1)
+		return I2C_SDA_LOW;
+	else if(sda_lev == 1 && scl_lev == 0)
+		return I2C_SCL_LOW;
+	else
+		return BOTH_LOW;
+}
 static inline void rk30_i2c_enable(struct rk30_i2c *i2c, unsigned int lastnak)
 {
         unsigned int con = 0;
@@ -254,7 +296,7 @@ static void rk30_irq_read_prepare(struct rk30_i2c *i2c)
 static void rk30_irq_read_get_data(struct rk30_i2c *i2c)
 {
      unsigned int i, len = i2c->msg->len - i2c->msg_ptr;
-     unsigned int p;
+     unsigned int p = 0;
 
      len = (len >= 32)?32:len;
 
@@ -490,7 +532,13 @@ static int rk30_i2c_doxfer(struct rk30_i2c *i2c,
 
         rk30_i2c_enable(i2c, (i2c->count > 32)?0:1); //if count > 32,  byte(32) send ack
 
-	timeout = wait_event_timeout(i2c->wait, (i2c->is_busy == 0), msecs_to_jiffies(I2C_WAIT_TIMEOUT));
+        if (in_atomic()){
+                int tmo = I2C_WAIT_TIMEOUT * USEC_PER_MSEC;
+                while(tmo-- && i2c->is_busy != 0)
+                        udelay(1);
+                timeout = (tmo <= 0)?0:1;
+        }else
+	        timeout = wait_event_timeout(i2c->wait, (i2c->is_busy == 0), msecs_to_jiffies(I2C_WAIT_TIMEOUT));
 
 	spin_lock_irqsave(&i2c->lock, flags);
         i2c->state = STATE_IDLE;
@@ -536,13 +584,15 @@ static int rk30_i2c_xfer(struct i2c_adapter *adap,
 	struct rk30_i2c *i2c = (struct rk30_i2c *)adap->algo_data;
 
         clk_enable(i2c->clk);
-        while(retry-- && ((state = i2c->check_idle()) != I2C_IDLE)){
+#ifdef I2C_CHECK_IDLE
+        while(retry-- && ((state = rk30_i2c_check_idle(i2c)) != I2C_IDLE)){
                 msleep(10);
         }
         if(retry == 0){
                 dev_err(i2c->dev, "i2c is not in idle(state = %d)\n", state);
                 return -EIO;
         }
+#endif
 
         if(msgs[0].scl_rate <= 400000 && msgs[0].scl_rate >= 10000)
 		scl_rate = msgs[0].scl_rate;
@@ -558,7 +608,6 @@ static int rk30_i2c_xfer(struct i2c_adapter *adap,
 	}
         if(i2c->is_div_from_arm[i2c->adap.nr]){
                 mutex_lock(&i2c->m_lock);
-		wake_lock(&i2c->idlelock[i2c->adap.nr]);
         }
 
 	rk30_i2c_set_clk(i2c, scl_rate);
@@ -567,7 +616,6 @@ static int rk30_i2c_xfer(struct i2c_adapter *adap,
         i2c_dbg(i2c->dev, "i2c transfer stop: addr: 0x%x, state: %d, ret: %d\n", msgs[0].addr, ret, i2c->state);
 
         if(i2c->is_div_from_arm[i2c->adap.nr]){
-		wake_unlock(&i2c->idlelock[i2c->adap.nr]);
                 mutex_unlock(&i2c->m_lock);
         }
 

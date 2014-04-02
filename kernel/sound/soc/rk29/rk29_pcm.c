@@ -31,11 +31,17 @@
 #define PCM_DMA_DEBUG 0
 
 #if 0
-#define DBG(x...) printk(KERN_DEBUG x)
+#define DBG(x...) printk(KERN_INFO x)
 #else
 #define DBG(x...) do { } while (0)
 #endif
 
+//#define INFIN_LOOP
+#ifdef INFIN_LOOP
+#define DMA_INFIN_LOOP() rk29_dma_has_infiniteloop()
+#else
+#define DMA_INFIN_LOOP() 0
+#endif
 
 static const struct snd_pcm_hardware rockchip_pcm_hardware = {
 	.info			= SNDRV_PCM_INFO_INTERLEAVED |
@@ -97,46 +103,65 @@ static void rockchip_pcm_enqueue(struct snd_pcm_substream *substream)
 {
 	struct rockchip_runtime_data *prtd = substream->runtime->private_data;	
 	dma_addr_t pos = prtd->dma_pos;
+	unsigned int limit;
 	int ret;
 
-//	DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);
-        
-	while (prtd->dma_loaded < prtd->dma_limit) {
-		unsigned long len = prtd->dma_period;
-//	DBG("dma_loaded: %d\n", prtd->dma_loaded);
-		if ((pos + len) > prtd->dma_end) {
-			len  = prtd->dma_end - pos;
+	DBG("Enter::%s----%d prtd->dma_period = %d prtd->dma_limit = %d\n",__FUNCTION__,__LINE__,prtd->dma_period,prtd->dma_limit);
+
+	if (rk29_dma_has_circular())
+		limit = (prtd->dma_end - prtd->dma_start) / prtd->dma_period;
+	else
+		limit = prtd->dma_limit;
+
+	if (DMA_INFIN_LOOP()) {
+		if(prtd->dma_period % (prtd->params->dma_size*16)){
+			printk("dma_period(%d) is not an integer multiple of dma_size(%d)",prtd->dma_period,prtd->params->dma_size*16);
+			rk29_dma_config(prtd->params->channel,
+								prtd->params->dma_size, 1);
+		}							
+		else
+			rk29_dma_config(prtd->params->channel,
+							prtd->params->dma_size, 16);	
+		ret = rk29_dma_enqueue_ring(prtd->params->channel,
+				substream, pos, prtd->dma_period, limit ,true);
+		if (ret == 0) 
+			pos = prtd->dma_start;
+	} else {
+		while (prtd->dma_loaded < prtd->dma_limit) {
+			unsigned long len = prtd->dma_period;
+	//	DBG("dma_loaded: %d\n", prtd->dma_loaded);
+			if ((pos + len) > prtd->dma_end) {
+				len  = prtd->dma_end - pos;
+			}
+
+			if((len%(prtd->params->dma_size*16) == 0) && (prtd->params->flag == 1))
+			{
+				ret = rk29_dma_config(prtd->params->channel,
+					prtd->params->dma_size, 16);
+				prtd->params->flag = 0;
+				DBG("size = 16, channel = %d, flag = %d\n",prtd->params->channel,prtd->params->flag);
+			}
+			else if((len%(prtd->params->dma_size*16) != 0) && (prtd->params->flag == 0))
+			{
+				ret = rk29_dma_config(prtd->params->channel,
+					prtd->params->dma_size, 1);
+				prtd->params->flag = 1;
+				DBG("size = 1, channel = %d, flag = %d\n",prtd->params->channel,prtd->params->flag);
+			}
+
+			ret = rk29_dma_enqueue(prtd->params->channel,substream, pos, len);
+	//		if(prtd->params->channel == 2)
+				DBG("Enter::%s, %d, ret=%d, Channel=%d, Addr=0x%X, Len=%lu\n",
+					   __FUNCTION__,__LINE__, ret, prtd->params->channel, pos, len);
+			if (ret == 0) {
+				prtd->dma_loaded++;
+				pos += prtd->dma_period;
+				if (pos >= prtd->dma_end)
+					pos = prtd->dma_start;
+			} else
+				break;
 		}
-
-		if((len%(prtd->params->dma_size*16) == 0) && (prtd->params->flag == 1))                 
-		{                                               
-			ret = rk29_dma_config(prtd->params->channel,                                    
-				prtd->params->dma_size, 16);                                            
-			prtd->params->flag = 0;                                         
-			DBG("size = 16, channel = %d, flag = %d\n",prtd->params->channel,prtd->params->flag);        
-		}                               
-		else if((len%(prtd->params->dma_size*16) != 0) && (prtd->params->flag == 0))            
-		{                                               
-			ret = rk29_dma_config(prtd->params->channel,                    
-				prtd->params->dma_size, 1);                                             
-			prtd->params->flag = 1;                                         
-			DBG("size = 1, channel = %d, flag = %d\n",prtd->params->channel,prtd->params->flag);         
-		}
-
-
-		ret = rk29_dma_enqueue(prtd->params->channel,substream, pos, len);
-//		if(prtd->params->channel == 2)
-			DBG("Enter::%s, %d, ret=%d, Channel=%d, Addr=0x%X, Len=%lu\n",
-                   __FUNCTION__,__LINE__, ret, prtd->params->channel, pos, len);		        
-		if (ret == 0) {
-			prtd->dma_loaded++;
-			pos += prtd->dma_period;
-			if (pos >= prtd->dma_end)
-				pos = prtd->dma_start;
-		} else 
-			break;
 	}
-
 	prtd->dma_pos = pos;
 }
 
@@ -153,7 +178,7 @@ void rk29_audio_buffdone(void *dev_id, int size,
 	t = ktime_to_us(ktime_sub(after, before));
 	if(result == RK29_RES_OK)
 	{
-		if(t > 23220+73 && t != ktime_to_us(after)) // 4096/4/44100 + 32/44100 
+		if(t > prtd->dma_period/4/44100 +73 && t != ktime_to_us(after)) // (23220)4096/4/44100 + 32/44100 
 		{
 			printk(KERN_DEBUG "Time out:: Audio DMA buffdone time out!!! the time = %lld!\n", t);
 		}
@@ -184,19 +209,18 @@ void rk29_audio_buffdone(void *dev_id, int size,
 	prtd = substream->runtime->private_data;
 	
 //	if(prtd->params->channel == 2)
-		DBG("Enter::%s----%d   channel =%d \n",__FUNCTION__,__LINE__);	
+		DBG("Enter::%s----%d   channel =%d \n",__FUNCTION__,__LINE__,prtd->params->channel);	
 	if(!(prtd->state & ST_RUNNING))
 		return;	
 	if (substream){
 		snd_pcm_period_elapsed(substream);
 	}
 	spin_lock(&prtd->lock);
-	prtd->dma_loaded--;
-	if (prtd->state & ST_RUNNING) {
+	if (!DMA_INFIN_LOOP() && prtd->state & ST_RUNNING) {
+		prtd->dma_loaded--;
 		rockchip_pcm_enqueue(substream);
 	}
-        spin_unlock(&prtd->lock);
-   
+	spin_unlock(&prtd->lock);
 }
 
 static int rockchip_pcm_hw_params(struct snd_pcm_substream *substream,
@@ -252,12 +276,14 @@ static int rockchip_pcm_hw_params(struct snd_pcm_substream *substream,
 	prtd->dma_period = params_period_bytes(params);
 	prtd->dma_start = runtime->dma_addr;
 	prtd->dma_pos = prtd->dma_start;
-	prtd->dma_end = prtd->dma_start + totbytes;
+	prtd->dma_end = prtd->dma_start + prtd->dma_limit*prtd->dma_period;
 	prtd->transfer_first = 1;
 	prtd->curr = NULL;
 	prtd->next = NULL;
 	prtd->end = NULL;
 	spin_unlock_irq(&prtd->lock);
+	printk(KERN_DEBUG "i2s dma info:periodsize(%ld),limit(%d),buffersize(%d),over(%d)\n",
+			prtd->dma_period,prtd->dma_limit,totbytes,totbytes-(prtd->dma_period*prtd->dma_limit));
 	return ret;
 }
 
@@ -467,12 +493,19 @@ static int rockchip_pcm_mmap(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 
-	DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);
+   DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);
 
+#ifdef CONFIG_RK_SRAM_DMA
+	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+        return remap_pfn_range(vma, vma->vm_start,
+		       substream->dma_buffer.addr >> PAGE_SHIFT,
+		       vma->vm_end - vma->vm_start, vma->vm_page_prot);
+#else
 	return dma_mmap_writecombine(substream->pcm->card->dev, vma,
 				     runtime->dma_area,
 				     runtime->dma_addr,
 				     runtime->dma_bytes);
+#endif
 }
 
 static struct snd_pcm_ops rockchip_pcm_ops = {
@@ -487,7 +520,8 @@ static struct snd_pcm_ops rockchip_pcm_ops = {
 	.mmap		= rockchip_pcm_mmap,
 };
 
-#ifdef CONFIG_ARCH_RK30
+#if defined(CONFIG_ARCH_RK3066B)
+#elif defined(CONFIG_ARCH_RK30)
 #define SRAM_DMA_PHYS_PLAYBACK	(dma_addr_t)(RK30_IMEM_PHYS + 16*1024)
 #define SRAM_DMA_START_PLAYBACK	(RK30_IMEM_NONCACHED + 16*1024)
 #define SRAM_DMA_PHYS_CAPTURE 	(dma_addr_t)(SRAM_DMA_PHYS_PLAYBACK + 24*1024)

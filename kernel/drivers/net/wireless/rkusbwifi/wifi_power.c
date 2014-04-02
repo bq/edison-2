@@ -11,8 +11,10 @@
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>
-
+#include <mach/gpio.h>
+#include <mach/iomux.h>
 #include "wifi_power.h"
+
 
 /*
  * rtw_channel_plan : The initialization parameter of wifi channel,

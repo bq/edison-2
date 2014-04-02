@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 ROCKCHIP, Inc.
+ * Copyright (C) 2012-2013 ROCKCHIP, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -28,10 +28,13 @@
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/fs.h>
+#include <linux/miscdevice.h>
 #include <linux/string.h>
 #include <linux/earlysuspend.h>
 #include <asm/unistd.h>
 #include <asm/uaccess.h>
+#include <mach/ddr.h>
+#include <linux/cpu.h>
 #ifdef DEBUG
 #define FREQ_PRINTK_DBG(fmt, args...) pr_debug(fmt, ## args)
 #define FREQ_PRINTK_LOG(fmt, args...) pr_debug(fmt, ## args)
@@ -65,14 +68,16 @@ static struct workqueue_struct *freq_wq;
 static struct clk *cpu_clk;
 static struct clk *cpu_pll;
 static struct clk *cpu_gpll;
+
 extern void kernel_power_off(void);
 extern void gpu_max_freq_set(int);
-
 static DEFINE_MUTEX(cpufreq_mutex);
 
 static struct clk *gpu_clk;
 static struct clk *ddr_clk;
+#if !defined(CONFIG_ARCH_RK3066B) && !defined(CONFIG_ARCH_RK3188)
 #define GPU_MAX_RATE 350*1000*1000
+#endif
 
 static int cpufreq_scale_rate_for_dvfs(struct clk *clk, unsigned long rate, dvfs_set_rate_callback set_rate);
 
@@ -97,7 +102,9 @@ static bool rk30_cpufreq_is_ondemand_policy(struct cpufreq_policy *policy)
 }
 
 /**********************thermal limit**************************/
+#if !defined(CONFIG_ARCH_RK3066B) && !defined(CONFIG_ARCH_RK3188)
 #define CONFIG_RK30_CPU_FREQ_LIMIT_BY_TEMP
+#endif
 
 #ifdef CONFIG_RK30_CPU_FREQ_LIMIT_BY_TEMP
 static void rk30_cpufreq_temp_limit_work_func(struct work_struct *work);
@@ -121,6 +128,32 @@ static const struct cpufreq_frequency_table temp_limits_high[] = {
 };
 
 extern int rk30_tsadc_get_temp(unsigned int chn);
+
+static char sys_state;
+static ssize_t sys_state_write(struct file *file, const char __user *buffer, size_t count, loff_t *ppos)
+{
+	char state;
+
+	if (count < 1)
+		return count;
+	if (copy_from_user(&state, buffer, 1)) {
+		return -EFAULT;
+	}
+
+	sys_state = state;
+	return count;
+}
+
+static const struct file_operations sys_state_fops = {
+	.owner	= THIS_MODULE,
+	.write	= sys_state_write,
+};
+
+static struct miscdevice sys_state_dev = {
+	.fops	= &sys_state_fops,
+	.name	= "sys_state",
+	.minor	= MISC_DYNAMIC_MINOR,
+};
 
 static void rk30_cpufreq_temp_limit_work_func(struct work_struct *work)
 {
@@ -147,7 +180,7 @@ static void rk30_cpufreq_temp_limit_work_func(struct work_struct *work)
 		while(1);
 	}
 	gpu_irqs[1] = kstat_irqs(IRQ_GPU_GP);
-	if (clk_get_rate(gpu_clk) > GPU_MAX_RATE) {
+	if (sys_state == '1' || clk_get_rate(gpu_clk) > GPU_MAX_RATE) {
 		delay = HZ / 20;
 		if ((gpu_irqs[1] - gpu_irqs[0]) < 3) {
 			limits_table = temp_limits_high;
@@ -243,17 +276,6 @@ static int rk30_verify_speed(struct cpufreq_policy *policy)
 		return -EINVAL;
 	return cpufreq_frequency_table_verify(policy, freq_table);
 }
-
-uint32_t ddr_set_rate(uint32_t nMHz);
-
-int ddr_scale_rate_for_dvfs(struct clk *clk, unsigned long rate, dvfs_set_rate_callback set_rate)
-{
-	#if defined (CONFIG_DDR_FREQ)
-	ddr_set_rate(rate/(1000*1000));
-	#endif
-	return 0;
-}
-
 static int rk30_cpu_init(struct cpufreq_policy *policy)
 {
 	if (policy->cpu == 0) {
@@ -265,11 +287,7 @@ static int rk30_cpu_init(struct cpufreq_policy *policy)
 
 		ddr_clk = clk_get(NULL, "ddr");
 		if (!IS_ERR(ddr_clk))
-		{
-			dvfs_clk_register_set_rate_callback(ddr_clk, ddr_scale_rate_for_dvfs);
 			clk_enable_dvfs(ddr_clk);
-			//clk_set_rate(ddr_clk,clk_get_rate(ddr_clk)-1);
-		}
 		
 		cpu_clk = clk_get(NULL, "cpu");
 		
@@ -290,11 +308,16 @@ static int rk30_cpu_init(struct cpufreq_policy *policy)
 		}
 		clk_enable_dvfs(cpu_clk);
 
+#if !defined(CONFIG_ARCH_RK3066B)
+#if defined(CONFIG_ARCH_RK30)
 		/* Limit gpu frequency between 133M to 400M */
 		dvfs_clk_enable_limit(gpu_clk, 133000000, 400000000);
+#endif
+#endif
 
 		freq_wq = create_singlethread_workqueue("rk30_cpufreqd");
 #ifdef CONFIG_RK30_CPU_FREQ_LIMIT_BY_TEMP
+		misc_register(&sys_state_dev);
 		if (rk30_cpufreq_is_ondemand_policy(policy)) {
 			queue_delayed_work(freq_wq, &rk30_cpufreq_temp_limit_work, 0*HZ);
 		}
@@ -337,6 +360,7 @@ static int rk30_cpu_exit(struct cpufreq_policy *policy)
 	cpufreq_unregister_notifier(&notifier_policy_block, CPUFREQ_POLICY_NOTIFIER);
 	if (freq_wq)
 		cancel_delayed_work(&rk30_cpufreq_temp_limit_work);
+	misc_deregister(&sys_state_dev);
 #endif
 	if (freq_wq) {
 		flush_workqueue(freq_wq);
@@ -525,9 +549,11 @@ static void ff_early_resume_func(struct early_suspend *h)
 static int __init ff_init(void)
 {
 	FF_DEBUG("enter %s\n", __func__);
+#ifdef CONFIG_HAS_EARLYSUSPEND
 	ff_early_suspend.suspend = ff_early_suspend_func;
 	ff_early_suspend.resume = ff_early_resume_func;
 	ff_early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 100;
+#endif
 	register_early_suspend(&ff_early_suspend);
 	return 0;
 }
@@ -537,7 +563,6 @@ static void __exit ff_exit(void)
 	FF_DEBUG("enter %s\n", __func__);
 	unregister_early_suspend(&ff_early_suspend);
 }
-
 
 /**************************target freq******************************/
 static unsigned int cpufreq_scale_limt(unsigned int target_freq, struct cpufreq_policy *policy, bool is_private)

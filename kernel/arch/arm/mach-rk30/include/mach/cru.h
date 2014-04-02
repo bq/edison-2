@@ -1,6 +1,8 @@
 #ifndef __MACH_CRU_H
 #define __MACH_CRU_H
-
+#if defined(CONFIG_ARCH_RK3066B)
+#include <mach/cru-rk3066b.h>
+#elif defined(CONFIG_ARCH_RK30)
 enum rk_plls_id {
 	APLL_ID = 0,
 	DPLL_ID,
@@ -113,10 +115,29 @@ enum rk_plls_id {
 #define CORE_CLK_DIV_MSK	(0x1F)
 #define CORE_CLK_DIV(i)		(((i) - 1) & 0x1F)
 
+/* for compatible with rk3066b */
+#define CPU_SEL_PLL_MSK		CORE_SEL_PLL_MSK
+#define CPU_SEL_PLL_W_MSK	CORE_SEL_PLL_W_MSK
+#define CPU_SEL_APLL		CORE_SEL_APLL
+#define CPU_SEL_GPLL		CORE_SEL_GPLL
+
+#define CPU_CLK_DIV_W_MSK	CORE_CLK_DIV_W_MSK
+#define CPU_CLK_DIV_MSK		CORE_CLK_DIV_MSK
+#define CPU_CLK_DIV(i)		CORE_CLK_DIV(i)
+
 /*******************CLKSEL1 BITS***************************/
 //aclk div
 
 #define GET_CORE_ACLK_VAL(reg) ((reg)>=4 ?8:((reg)+1))
+
+/* for compatible with rk3066b */
+#define CPU_ACLK_W_MSK		CORE_ACLK_W_MSK
+#define CPU_ACLK_MSK		CORE_ACLK_MSK
+#define CPU_ACLK_11		CORE_ACLK_11
+#define CPU_ACLK_21		CORE_ACLK_21
+#define CPU_ACLK_31		CORE_ACLK_31
+#define CPU_ACLK_41		CORE_ACLK_41
+#define CPU_ACLK_81		CORE_ACLK_81
 
 #define CORE_ACLK_W_MSK		(7 << 16)
 #define CORE_ACLK_MSK		(7 << 0)
@@ -158,6 +179,8 @@ enum rk_plls_id {
 /*******************clksel10***************************/
 
 #define PERI_ACLK_DIV_MASK 0x1f
+#define PERI_ACLK_DIV_W_MSK	(PERI_ACLK_DIV_MASK << 16)
+#define PERI_ACLK_DIV(i)	(((i) - 1) & PERI_ACLK_DIV_MASK)
 #define PERI_ACLK_DIV_OFF 0
 
 #define PERI_HCLK_DIV_MASK 0x3
@@ -345,6 +368,10 @@ enum cru_clk_gate {
 	CLK_GATE_MAX,
 };
 
+/* for compatible with rk3066b */
+#define CLK_GATE_ACLK_CORE	CLK_GATE_ACLK_CPU
+#define CLK_GATE_HCLK_L2MEM	CLK_GATE_ACLK_INTMEM
+
 #define SOFT_RST_ID(i)		(16 * (i))
 
 enum cru_soft_reset {
@@ -511,4 +538,5 @@ static inline void cru_set_soft_reset(enum cru_soft_reset idx, bool on)
 	dsb();
 }
 
+#endif
 #endif

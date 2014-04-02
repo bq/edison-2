@@ -341,7 +341,7 @@ static int bq24196_charge_mode_config(int on)
 
 	if(1 == on){
 		bq24196_update_charge_mode(CHARGE_MODE_CONFIG_OTG_OUTPUT);
-		bq24196_update_otg_mode_current(OTG_MODE_CURRENT_CONFIG_500MA);
+		bq24196_update_otg_mode_current(OTG_MODE_CURRENT_CONFIG_1300MA);
 		gpio_direction_output(bq24196_pdata->otg_en_pin, 1);
 	}else{
 		gpio_direction_output(bq24196_pdata->otg_en_pin, 0);
@@ -389,19 +389,32 @@ static irqreturn_t otg_irq_handler(int irq, void *dev_id)
 }
 
 static irqreturn_t status_irq_handler(int irq, void *dev_id);
+static void status_irq_wakeup(struct work_struct *work);
+static DECLARE_DELAYED_WORK(status_irq_work, status_irq_wakeup);
 
 static void status_irq_wakeup(struct work_struct *work)
 {
+	int ret, i;
+
 	if(1 == otg_flag){
 		if(1 == bq24196_otg_mode_current_check())
 		{
 			bq24196_charge_mode_config(0);
+			otg_flag = 0;
 			DBG("OTG over current\n");
+			schedule_delayed_work(&status_irq_work, msecs_to_jiffies(1000));
+		}
+	}else{
+		if(1 == gpio_get_value(bq24196_pdata->otg_irq_pin))
+		{
+			bq24196_charge_mode_config(1);
+			otg_flag = 1;
+		}else{
+			bq24196_charge_mode_config(0);
+			otg_flag = 0;
 		}
 	}
 }
-
-static DECLARE_DELAYED_WORK(status_irq_work, status_irq_wakeup);
 
 static irqreturn_t status_irq_handler(int irq, void *dev_id)
 {

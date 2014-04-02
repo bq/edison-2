@@ -24,7 +24,6 @@
 #define SUPPORT_SYSRQ
 #endif
 
-//#define DEBUG
 #include <linux/module.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
@@ -49,7 +48,26 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 
-#define VERSION_AND_TIME  "rk_serial.c v1.3 2012-12-14"
+/*
+*			 Driver Version Note
+*
+*v0.0 : this driver is 2.6.32 kernel driver;
+*v0.1 : this driver is 3.0.8 kernel driver;
+*v1.0 : 2012-08-09
+*		1.modify dma dirver;
+*		2.enable Programmable THRE Interrupt Mode, so we can just judge ((up->iir & 0x0f) == 0x02) when transmit
+*		3.reset uart and set it to loopback state to ensure setting baud rate sucessfully 
+*v1.1 : 2012-08-23
+*		1. dma driver:make "when tx dma is only enable" work functionally  
+*v1.2 : 2012-08-28
+*		1. dma driver:serial rx use new dma interface  rk29_dma_enqueue_ring 
+*v1.3 : 2012-12-14
+*		1. When enable Programmable THRE Interrupt Mode, in lsr register, only UART_LSR_TEMT means transmit empty, but
+		 UART_LSR_THRE doesn't. So, the macro BOTH_EMPTY should be replaced with UART_LSR_TEMT.
+*v1.4 : 2013-04-16
+*		1.fix bug dma buffer free error
+*/
+#define VERSION_AND_TIME  "rk_serial.c v1.4 2013-04-16"
 
 #define PORT_RK		90
 #define UART_USR	0x1F	/* UART Status Register */
@@ -65,13 +83,14 @@
 #define UART_NR	4   //uart port number
 
 
-/* configurate whether the port transmit-receive by DMA */
+/* configurate whether the port transmit-receive by DMA in menuconfig*/
 #define OPEN_DMA      1
 #define CLOSE_DMA     0
 
 #define TX_DMA (1)
 #define RX_DMA (2)
-#ifdef CONFIG_UART0_DMA_RK29
+
+#ifdef CONFIG_UART0_DMA_RK29 
 #define UART0_USE_DMA CONFIG_UART0_DMA_RK29
 #else
 #define UART0_USE_DMA CLOSE_DMA
@@ -86,7 +105,6 @@
 #else
 #define UART2_USE_DMA CLOSE_DMA
 #endif
-
 #ifdef CONFIG_UART3_DMA_RK29
 #define UART3_USE_DMA CONFIG_UART3_DMA_RK29
 #else
@@ -98,6 +116,7 @@
 #define RX_TIMEOUT		(3000*3)  //uint ms
 #define DMA_TX_TRRIGE_LEVEL 128
 #define SERIAL_CIRC_CNT_TO_END(xmit)   CIRC_CNT_TO_END(xmit->head, xmit->tail, UART_XMIT_SIZE)
+
 
 #define USE_DMA (UART0_USE_DMA | UART1_USE_DMA | UART2_USE_DMA | UART3_USE_DMA)
 #if USE_DMA
@@ -118,8 +137,13 @@ static struct uart_driver serial_rk_reg;
 #ifdef CONFIG_ARCH_RK29
 #define DBG_PORT 1   //DBG_PORT which uart is used to print log message
 #else
-#define DBG_PORT -1   //DBG_PORT which uart is used to print log message
+#ifndef CONFIG_RK_DEBUG_UART   //DBG_PORT which uart is used to print log message
+#define DBG_PORT 2
+#else
+#define DBG_PORT CONFIG_RK_DEBUG_UART
 #endif
+#endif
+
 #ifdef CONFIG_SERIAL_CORE_CONSOLE
 #define uart_console(port)	((port)->cons && (port)->cons->index == (port)->line)
 #else
@@ -140,9 +164,11 @@ static void dbg(const char *fmt, ...)
 	printascii(buff);
 }
 
-#define DEBUG 1
+//enable log output
+#define DEBUG 0
 static int log_port = -1;
 module_param(log_port, int, S_IRUGO|S_IWUSR);
+
 #if DEBUG
 #define DEBUG_INTR(fmt...)	if (up->port.line == log_port && !uart_console(&up->port)) dbg(fmt)
 #else
@@ -159,25 +185,29 @@ struct rk_uart_dma {
 	enum dma_ch tx_dmach;
 
 	//receive and transfer buffer
-	char * rx_buffer;
+	char * rx_buffer;    //visual memory
 	char * tx_buffer;
-	dma_addr_t rx_phy_addr;
+	dma_addr_t rx_phy_addr;  //physical memory
 	dma_addr_t tx_phy_addr;
 	u32 rb_size;		 //buffer size
 	u32 tb_size;
 
+	//regard the rx buffer as a circular buffer
 	u32 rb_head;
 	u32 rb_tail;
 	u32 rx_size;
+
 	spinlock_t		tx_lock;
 	spinlock_t		rx_lock;
+
 	char tx_dma_inited;   //1:dma tx channel has been init
 	char rx_dma_inited;	 //1:dma rx channel has been init
-	char tx_dma_used;
+	char tx_dma_used;	 //1:dma tx is working
 	char rx_dma_used;    //1:dma rx is working
+
 	/* timer to poll activity on rx dma */
 	char use_timer;
-	int			rx_timeout;
+	int	 rx_timeout;
 	struct timer_list rx_timer;
 };
 #endif
@@ -227,6 +257,7 @@ static int serial_rk_start_rx_dma(struct uart_port *port);
 static inline int serial_rk_start_tx_dma(struct uart_port *port) { return 0; }
 #endif
 static int serial_rk_startup(struct uart_port *port);
+
 static inline unsigned int serial_in(struct uart_rk_port *up, int offset)
 {
 	offset = offset << 2;
@@ -268,20 +299,20 @@ static int serial_dl_write(struct uart_rk_port *up, unsigned int value)
 {
 	unsigned int tmout = 100;
 
-		while(!(serial_in(up, UART_LCR) & UART_LCR_DLAB)){
-			if (--tmout == 0){
+	while(!(serial_in(up, UART_LCR) & UART_LCR_DLAB)){
+		if (--tmout == 0){
 			if(up->port.line != DBG_PORT)
 				dbg("set serial.%d baudrate fail with DLAB not set\n", up->port.line);
-				return -1;
-			}
+			return -1;
 		}
+	}
 
-		tmout = 15000;
-		while(serial_in(up, UART_USR) & UART_USR_BUSY){
-			if (--tmout == 0){
+	tmout = 15000;
+	while(serial_in(up, UART_USR) & UART_USR_BUSY){
+		if (--tmout == 0){
 			if(up->port.line != DBG_PORT)
 				dbg("set serial.%d baudrate timeout\n", up->port.line);
-				return -1;
+			return -1;
 		}
 		udelay(1);
 	}
@@ -297,14 +328,13 @@ static int serial_lcr_write(struct uart_rk_port *up, unsigned char value)
 {
 	unsigned int tmout = 15000;
 
-		while(serial_in(up, UART_USR) & UART_USR_BUSY){
-
-			if (--tmout == 0){
+	while(serial_in(up, UART_USR) & UART_USR_BUSY){
+		if (--tmout == 0){
 			if(up->port.line != DBG_PORT)
 				dbg("set serial.%d lc r = 0x%02x timeout\n", up->port.line, value);
-				return -1;
-			}
-			udelay(1);
+			return -1;
+		}
+		udelay(1);
 	}
 
 	serial_out(up, UART_LCR, value);
@@ -376,12 +406,12 @@ static void serial_rk_stop_tx(struct uart_port *port)
 		container_of(port, struct uart_rk_port, port);
 #if USE_DMA
 	struct rk_uart_dma *uart_dma = up->dma;
-
 	if(uart_dma->use_dma & TX_DMA){
 		serial_rk_release_dma_tx(port);
 	}
 #endif
 	__stop_tx(up);
+
 }
 
 
@@ -409,7 +439,6 @@ static void serial_rk_stop_rx(struct uart_port *port)
 		container_of(port, struct uart_rk_port, port);
 #if USE_DMA
 	struct rk_uart_dma *uart_dma = up->dma;
-
 	if(uart_dma->use_dma & RX_DMA){
 		serial_rk_release_dma_rx(port);
 	}
@@ -488,11 +517,11 @@ static void serial_rk_dma_txcb(void *buf, int size, enum rk29_dma_buffresult res
 	port->icount.tx += size;
 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(&up->port);
+
 	//spin_lock(&(up->dma->tx_lock));
 	up->dma->tx_dma_used = 0;
 	//spin_unlock(&(up->dma->tx_lock));
 	serial_rk_enable_ier_thri(up);
-
 	up->port_activity = jiffies;
 //	dev_info(up->port.dev, "s:%d\n", size);
 }
@@ -502,6 +531,7 @@ static int serial_rk_init_dma_tx(struct uart_port *port) {
 	struct uart_rk_port *up =
 				container_of(port, struct uart_rk_port, port);
 	struct rk_uart_dma *uart_dma = up->dma;
+
 	if(!port || !uart_dma){
 		dev_info(up->port.dev, "serial_rk_init_dma_tx fail\n");
 		return -1;
@@ -520,10 +550,12 @@ static int serial_rk_init_dma_tx(struct uart_port *port) {
 		dev_info(up->port.dev, "rk29_dma_set_buffdone_fn tx fail\n");
 		return -1;
 	}
+	
 	if (rk29_dma_devconfig(uart_dma->tx_dmach, RK29_DMASRC_MEM, (unsigned long)(port->iobase + UART_TX))) {
 		dev_info(up->port.dev, "rk29_dma_devconfig tx fail\n");
 		return -1;
 	}
+	
 	if (rk29_dma_config(uart_dma->tx_dmach, 1, 16)) {
 		dev_info(up->port.dev, "rk29_dma_config tx fail\n");
 		return -1;
@@ -553,6 +585,7 @@ static int serial_rk_start_tx_dma(struct uart_port *port)
 
 //	spin_lock(&(uart_dma->tx_lock));
 	__stop_tx(up);
+
 	count = SERIAL_CIRC_CNT_TO_END(xmit);
 	count -= count%16;
 	if(count >= DMA_TX_TRRIGE_LEVEL) {
@@ -563,12 +596,10 @@ static int serial_rk_start_tx_dma(struct uart_port *port)
 		up->dma->tx_dma_used = 1;
 	}
 //	spin_unlock(&(uart_dma->tx_lock));
-
 	return 1;
 err_out:
 	dev_info(up->port.dev, "-serial_rk_start_tx_dma-error-\n");
 	return -1;
-
 }
 
 
@@ -576,7 +607,7 @@ err_out:
 /*RX*/
 static void serial_rk_dma_rxcb(void *buf, int size, enum rk29_dma_buffresult result) {
 
-
+	//printk(">>%s:%d\n", __func__, result);
 }
 
 static void serial_rk_release_dma_rx(struct uart_port *port)
@@ -584,9 +615,11 @@ static void serial_rk_release_dma_rx(struct uart_port *port)
 	struct uart_rk_port *up =
 				container_of(port, struct uart_rk_port, port);
 	struct rk_uart_dma *uart_dma = up->dma;
+	
 	if(!port){
 		return;
 	}
+	
 	if(uart_dma && uart_dma->rx_dma_inited) {
 		del_timer(&uart_dma->rx_timer);
 		rk29_dma_free(uart_dma->rx_dmach, &rk29_uart_dma_client);
@@ -602,10 +635,12 @@ static int serial_rk_init_dma_rx(struct uart_port *port) {
 	struct uart_rk_port *up =
 				container_of(port, struct uart_rk_port, port);
 	struct rk_uart_dma *uart_dma = up->dma;
+
 	if(!port || !uart_dma){
 		dev_info(up->port.dev, "serial_rk_init_dma_rx: port fail\n");
 		return -1;
 	}
+
 	if(uart_dma->rx_dma_inited) {
 		return 0;
 	}
@@ -619,6 +654,7 @@ static int serial_rk_init_dma_rx(struct uart_port *port) {
 		dev_info(up->port.dev, "rk29_dma_set_buffdone_fn rx fail\n");
 		return -1;
 	}
+
 	if (rk29_dma_devconfig(uart_dma->rx_dmach, RK29_DMASRC_HW, (unsigned long)(port->iobase + UART_RX))) {
 		dev_info(up->port.dev, "rk29_dma_devconfig rx fail\n");
 		return -1;
@@ -652,19 +688,19 @@ static int serial_rk_start_rx_dma(struct uart_port *port)
 		dev_info(up->port.dev, "*******serial_rk_init_dma_rx*******error*******\n");
 		return -1;
 	}
-
+	
 #if 0	
 		if (rk29_dma_enqueue(uart_dma->rx_dmach, (void *)up, uart_dma->rx_phy_addr,
 				uart_dma->rb_size/2)) {
-		dev_info(up->port.dev, "*******rk29_dma_enqueue fail*****\n");
-		return -1;
-	}
+			dev_info(up->port.dev, "*******rk29_dma_enqueue fail*****\n");
+			return -1;
+		}
 
 		if (rk29_dma_enqueue(uart_dma->rx_dmach, (void *)up,
 				uart_dma->rx_phy_addr+uart_dma->rb_size/2, uart_dma->rb_size/2)) {
-		dev_info(up->port.dev, "*******rk29_dma_enqueue fail*****\n");
-		return -1;
-	}
+			dev_info(up->port.dev, "*******rk29_dma_enqueue fail*****\n");
+			return -1;
+		}
 
 #else
 	rk29_dma_enqueue_ring(uart_dma->rx_dmach, (void *)up, uart_dma->rx_phy_addr, uart_dma->rb_size/4, 4, false);
@@ -686,7 +722,6 @@ static void serial_rk_update_rb_addr(struct uart_rk_port *up){
 	uart_dma->rx_size = 0;
 	if(uart_dma->rx_dma_used == 1){
 		rk29_dma_getposition(uart_dma->rx_dmach, &current_pos, &rx_current_pos);
-
 		uart_dma->rb_head = (rx_current_pos - uart_dma->rx_phy_addr);
 		uart_dma->rx_size = CIRC_CNT(uart_dma->rb_head, uart_dma->rb_tail, uart_dma->rb_size);
 	}
@@ -701,7 +736,8 @@ static void serial_rk_report_dma_rx(unsigned long uart)
 
 	if(!uart_dma->rx_dma_used || !up->port.state->port.tty)
 		return;
-		serial_rk_update_rb_addr(up);
+
+	serial_rk_update_rb_addr(up);
 
 	while(1) {
 		count = CIRC_CNT_TO_END(uart_dma->rb_head, uart_dma->rb_tail, uart_dma->rb_size);
@@ -710,22 +746,13 @@ static void serial_rk_report_dma_rx(unsigned long uart)
 		up->port.icount.rx += count;
 		flip = tty_insert_flip_string(up->port.state->port.tty, uart_dma->rx_buffer
 				+ uart_dma->rb_tail, count);
-				tty_flip_buffer_push(up->port.state->port.tty);
-
+		tty_flip_buffer_push(up->port.state->port.tty);
 		uart_dma->rb_tail = (uart_dma->rb_tail + count) & (uart_dma->rb_size - 1);
 		up->port_activity = jiffies;
 	}
 
-
-
-
-
-//		serial_out(up, 0x2a, 0x01);
-//		serial_out(up, 0x22, 0x01);
-
-		//serial_rk_start_rx_dma(&up->port);
+	//if (uart_dma->rx_size > 0)
 	//	printk("rx_size:%d ADDR:%x\n", uart_dma->rx_size, uart_dma->rb_head);
-
 
 	if(uart_dma->use_timer == 1){
 		mod_timer(&uart_dma->rx_timer, jiffies + msecs_to_jiffies(uart_dma->rx_timeout));
@@ -745,7 +772,9 @@ static void serial_rk_report_revdata_workfunc(struct work_struct *work)
 {
 	struct uart_rk_port *up =
 				container_of(work, struct uart_rk_port, uart_work);
+
 	serial_rk_report_dma_rx((unsigned long)up);
+
 	//spin_lock(&(up->dma->rx_lock));
 
 	if(up->port.state->port.tty && up->dma->use_timer != 1 && up->fifo_size > 0){
@@ -766,9 +795,13 @@ static void serial_rk_start_dma_rx(struct work_struct *work)
 {
 	struct uart_rk_port *up =
 					container_of(work, struct uart_rk_port, uart_work_rx);
+
+	//mod_timer(&up->dma->rx_timer, jiffies + msecs_to_jiffies(up->dma->rx_timeout));
+	//rk29_dma_ctrl(up->dma->rx_dmach, RK29_DMAOP_START);
 	//serial_rk_start_rx_dma(&up->port);
+
 }
-#endif /* USE_DMA */
+#endif
 
 #endif /* USE_DMA */
 
@@ -871,6 +904,7 @@ static void transmit_chars(struct uart_rk_port *up)
 		return;
 	}
 #if USE_DMA
+	//hhb
 	if(up->dma->use_dma & TX_DMA){
 		if(SERIAL_CIRC_CNT_TO_END(xmit) >= DMA_TX_TRRIGE_LEVEL){
 			serial_rk_start_tx_dma(&up->port);
@@ -948,6 +982,7 @@ static void serial_rk_handle_port(struct uart_rk_port *up)
 				DEBUG_INTR("error:lsr=0x%x\n", status);
 			}
 		}
+
 		if (status & 0x02) {
 			if(up->port.line != DBG_PORT){
 				dev_info(up->port.dev, "error:lsr=0x%x\n", status);
@@ -955,21 +990,19 @@ static void serial_rk_handle_port(struct uart_rk_port *up)
 				DEBUG_INTR("error:lsr=0x%x\n", status);
 			}
 		}
+
 		if(!(up->dma->use_dma & RX_DMA)) {
 			if (status & (UART_LSR_DR | UART_LSR_BI)) {
-				//receive_chars(up, &status);
-				//mod_timer(&up->prk29_uart_dma_t->rx_timer, jiffies +
-				//msecs_to_jiffies(up->prk29_uart_dma_t->rx_timeout));
-					receive_chars(up, &status);
-				}
+				receive_chars(up, &status);
 			}
+		}
+
 		if ((up->iir & 0x0f) == 0x02) {
 			transmit_chars(up);
 		}
-
-	} else
+	} else 
 #endif
-	{	//dma mode disable
+	{   //dma mode disable
 
 		/*
 		 * when uart receive a serial of data which doesn't have stop bit and so on, that causes frame error,and
@@ -979,16 +1012,12 @@ static void serial_rk_handle_port(struct uart_rk_port *up)
 		 */
 
 		if (status & UART_LSR_RFE) {
-			
 			if(up->port.line != DBG_PORT){
 				dev_info(up->port.dev, "error:lsr=0x%x\n", status);
 				status = serial_in(up, UART_LSR);
 				DEBUG_INTR("error:lsr=0x%x\n", status);
 				rk29_uart_dump_register(up);
 			}
-			
-			
-		//	rk29_uart_dump_register(up);
 		}
 
 		if (status & (UART_LSR_DR | UART_LSR_BI)) {
@@ -996,11 +1025,12 @@ static void serial_rk_handle_port(struct uart_rk_port *up)
 		}
 		check_modem_status(up);
 		//hhb@rock-chips.com when FIFO and THRE mode both are enabled,and FIFO TX empty trigger is set to larger than 1,
+		//,we need to add ((up->iir & 0x0f) == 0x02) to transmit_chars,because when entering interrupt,the FIFO and THR
+		//might not be 1.
 		if ((up->iir & 0x0f) == 0x02) {
 			transmit_chars(up);
 		}
 	}
-
 	spin_unlock_irqrestore(&up->port.lock, flags);
 }
 
@@ -1017,7 +1047,6 @@ static irqreturn_t serial_rk_interrupt(int irq, void *dev_id)
 	iir = serial_in(up, UART_IIR);
 
 	DEBUG_INTR("%s(%d) iir = 0x%02x\n", __func__, irq, iir);
-
 	up->iir = iir;
 
 	if (!(iir & UART_IIR_NO_INT)) {
@@ -1201,7 +1230,7 @@ static int serial_rk_startup(struct uart_port *port)
 		container_of(port, struct uart_rk_port, port);
 	unsigned long flags;
 	int retval, fifosize = 0;
-
+	
 
 	dev_dbg(port->dev, "%s\n", __func__);
 
@@ -1223,10 +1252,13 @@ static int serial_rk_startup(struct uart_port *port)
 	 * (they will be reenabled in set_termios())
 	 */
 	serial_rk_clear_fifos(up);
+
+	//read uart fifo size  hhb@rock-chips.com
 	fifosize = __raw_readl(up->port.membase + 0xf4);
 	up->port.fifosize = ((fifosize >> 16) & 0xff) << 4;
 	if(up->port.fifosize <= 0)
 		up->port.fifosize = 32;
+	//printk("fifo size:%d :%08x\n", up->port.fifosize, fifosize);
 
 	/*
 	 * Clear the interrupt registers.
@@ -1267,18 +1299,14 @@ static int serial_rk_startup(struct uart_port *port)
 #if 0
 	up->msr_saved_flags = 0;
 #endif
-
 #if USE_DMA
 	if (up->dma->use_dma & TX_DMA) {
-
 		if(up->port.state->xmit.buf != up->dma->tx_buffer){
 			free_page((unsigned long)up->port.state->xmit.buf);
 			up->port.state->xmit.buf = up->dma->tx_buffer;
 		}
-
-
-	} else
-#endif /* USE_DMA */
+	} else 
+#endif
 	{
 		up->ier = 0;
 		serial_out(up, UART_IER, up->ier);
@@ -1323,6 +1351,8 @@ static void serial_rk_shutdown(struct uart_port *port)
 	 */
 	(void) serial_in(up, UART_RX);
 #if USE_DMA
+	if (up->dma->use_dma & TX_DMA)
+		up->port.state->xmit.buf = NULL;
 #endif
 	free_irq(up->port.irq, up);
 	clk_disable(up->clk);
@@ -1379,20 +1409,9 @@ serial_rk_set_termios(struct uart_port *port, struct ktermios *termios,
 				  port->uartclk / 16);
 
 	quot = uart_get_divisor(port, baud);
-
 	//dev_info(up->port.dev, "uartclk:%d\n", port->uartclk/16);
-//	dev_info(up->port.dev, "quot:%d\n", quot);
-
-	/*
-	 * To wait long enough to avoid writting lcr when the uart is busy
-	 * because of data communication, so that we can set lcr and baud rate
-	 * successfully. added by hhb@rock-chips.com
-	 */
-
-
-
+	//dev_info(up->port.dev, "baud:%d\n", baud);
 	//dev_info(up->port.dev, "quot:%d\n", quot);
-
 
 	if (baud < 2400){
 		fcr = UART_FCR_ENABLE_FIFO | UART_FCR_TRIGGER_1;
@@ -1408,7 +1427,9 @@ serial_rk_set_termios(struct uart_port *port, struct ktermios *termios,
 		{
 			fcr |= UART_FCR_T_TRIG_01;
 		}
+
 #if USE_DMA
+		//added by hhb@rock-chips.com
 		if(up->dma->use_dma & RX_DMA){	
 			fcr |= UART_FCR_R_TRIG_00;
 		} else
@@ -1482,39 +1503,41 @@ serial_rk_set_termios(struct uart_port *port, struct ktermios *termios,
 		up->ier |= UART_IER_MSI;
 #endif
 
+	//to avoid uart busy when set baud rate  hhb@rock-chips.com
 	serial_out(up, UART_SRR, UART_RESET);
 	mcr = serial_in(up, UART_MCR);
 	serial_out(up, UART_MCR, mcr | 0x10);  //loopback mode
+	
 	up->lcr = cval;				/* Save LCR */
 	/* set DLAB */
-	if(serial_lcr_write(up, cval | UART_LCR_DLAB)){
+	if(serial_lcr_write(up, cval | UART_LCR_DLAB)) {
 		if(up->port.line != DBG_PORT)
-		dbg("serial.%d set DLAB fail\n", up->port.line);
+			dbg("serial.%d set DLAB fail\n", up->port.line);
 		serial_out(up, UART_SRR, UART_RESET);
 		goto fail;
 	}
 
 	/* set uart baud rate */
-	if(serial_dl_write(up, quot)){
+	if(serial_dl_write(up, quot)) {
 		if(up->port.line != DBG_PORT)
-		dbg("serial.%d set dll fail\n", up->port.line);
+			dbg("serial.%d set dll fail\n", up->port.line);
 		serial_out(up, UART_SRR, UART_RESET);
 		goto fail;
 	}
 
 	/* reset DLAB */
-	if(serial_lcr_write(up, cval)){
+	if(serial_lcr_write(up, cval)) {
 		if(up->port.line != DBG_PORT)
-		dbg("serial.%d reset DLAB fail\n", up->port.line);
+			dbg("serial.%d reset DLAB fail\n", up->port.line);
 		serial_out(up, UART_SRR, UART_RESET);
 		goto fail;
 	}
-	else{
+	else {
 		serial_rk_set_mctrl(&up->port, up->port.mctrl);
 		up->fcr = fcr;
 		serial_out(up, UART_FCR, up->fcr);		/* set fcr */
 		up->ier = 0;
-		/* enable the uart interrupt last */
+		//start serial receive data
 #if USE_DMA
 		if (up->dma->use_dma) {
 			up->ier |= UART_IER_RLSI;
@@ -1522,25 +1545,26 @@ serial_rk_set_termios(struct uart_port *port, struct ktermios *termios,
 			if (up->dma->use_dma & RX_DMA)
 				serial_rk_start_rx_dma(&up->port);
 			else
-		up->ier |= UART_IER_RDI;
+				up->ier |= UART_IER_RDI;
 		} else
 #endif
 		{
+			//  not use dma receive
 			up->ier |= UART_IER_RDI;
-		up->ier |= UART_IER_RLSI;
+			up->ier |= UART_IER_RLSI;
 			if(up->port.line != DBG_PORT)
 				up->ier |= UART_IER_PTIME;   //Programmable THRE Interrupt Mode Enable
+
 		}
 		serial_out(up, UART_IER, up->ier);
 	}
-
+	
 	spin_unlock_irqrestore(&up->port.lock, flags);
 
 	/* Don't rewrite B0 */
 	if (tty_termios_baud_rate(termios))
 		tty_termios_encode_baud_rate(termios, baud, baud);
 	dev_dbg(port->dev, "-%s baud %d\n", __func__, baud);
-
 	return;
 
 fail:
@@ -1771,6 +1795,7 @@ static int __devinit serial_rk_probe(struct platform_device *pdev)
 	struct resource		*mem;
 	int irq;
 	int ret = -ENOSPC;
+	
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!mem) {
 		dev_err(&pdev->dev, "no mem resource?\n");
@@ -1813,6 +1838,7 @@ static int __devinit serial_rk_probe(struct platform_device *pdev)
 	up->port.iotype = UPIO_DWAPB;
 
 	up->port.regshift = 2;
+	//fifo size default is 32, but it will be updated later when start_up
 	up->port.fifosize = 32;
 	up->port.ops = &serial_rk_pops;
 	up->port.line = pdev->id;
@@ -1828,7 +1854,7 @@ static int __devinit serial_rk_probe(struct platform_device *pdev)
 
 #if USE_DMA
 	/* set dma config */
-		pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
+	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 	if(up->dma->use_dma & RX_DMA) {
 		//timer
 		up->dma->use_timer = USE_TIMER;
@@ -1837,41 +1863,47 @@ static int __devinit serial_rk_probe(struct platform_device *pdev)
 		up->dma->rx_timeout = 10;
 		up->dma->rx_timer.expires = jiffies + msecs_to_jiffies(up->dma->rx_timeout);
 		init_timer(&up->dma->rx_timer);
-		//tx buffer
+
+		//rx buffer
 		up->dma->rb_size =  UART_XMIT_SIZE*2;
 		up->dma->rx_buffer = dmam_alloc_coherent(up->port.dev, up->dma->rb_size,
 				&up->dma->rx_phy_addr, DMA_MEMORY_MAP);
 		up->dma->rb_tail = 0;
+
 		if(!up->dma->rx_buffer){
 			dev_info(up->port.dev, "dmam_alloc_coherent dma_rx_buffer fail\n");
 		}
-		else{
+		else {
 			dev_info(up->port.dev, "dma_rx_buffer 0x%08x\n", (unsigned) up->dma->rx_buffer);
 			dev_info(up->port.dev, "dma_rx_phy 0x%08x\n", (unsigned)up->dma->rx_phy_addr);
 		}
+
+		// work queue
+		//INIT_WORK(&up->uart_work, serial_rk_report_revdata_workfunc);
+		//INIT_WORK(&up->uart_work_rx, serial_rk_start_dma_rx);
+		//up->uart_wq = create_singlethread_workqueue("uart_workqueue");
 		up->dma->rx_dma_used = 0;
 		spin_lock_init(&(up->dma->rx_lock));
 		serial_rk_init_dma_rx(&up->port);
 	}
+
 	if(up->dma->use_dma & TX_DMA){
-		//rx buffer
+		//tx buffer
 		up->dma->tb_size = UART_XMIT_SIZE;
 		up->dma->tx_buffer = dmam_alloc_coherent(up->port.dev, up->dma->tb_size,
 				&up->dma->tx_phy_addr, DMA_MEMORY_MAP);
 		if(!up->dma->tx_buffer){
 			dev_info(up->port.dev, "dmam_alloc_coherent dma_tx_buffer fail\n");
 		}
-		else {
+		else{
 			dev_info(up->port.dev, "dma_tx_buffer 0x%08x\n", (unsigned) up->dma->tx_buffer);
 			dev_info(up->port.dev, "dma_tx_phy 0x%08x\n", (unsigned) up->dma->tx_phy_addr);
 		}
-
-		// work queue
 		spin_lock_init(&(up->dma->tx_lock));
 		serial_rk_init_dma_tx(&up->port);
 	}
-#endif
 
+#endif
 	serial_rk_add_console_port(up);
 	ret = uart_add_one_port(&serial_rk_reg, &up->port);
 	if (ret != 0)
@@ -1963,6 +1995,7 @@ static struct platform_driver serial_rk_driver = {
 static int __init serial_rk_init(void)
 {
 	int ret;
+	//hhb@rock-chips.com
 	printk("%s\n", VERSION_AND_TIME);
 
 	ret = uart_register_driver(&serial_rk_reg);

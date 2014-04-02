@@ -910,6 +910,8 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 		wiphy_debug(local->hw.wiphy, "Failed to initialize wep: %d\n",
 			    result);
 
+	ieee80211_led_init(local);
+
 	rtnl_lock();
 
 	result = ieee80211_init_rate_ctrl_alg(local,
@@ -929,9 +931,19 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 				   "Failed to add default virtual iface\n");
 	}
 
-	rtnl_unlock();
+	//add by lintao@rock-chips.com : register p2p0 IFTYPE_STA
+	#ifdef CONFIG_ESP8089 
+	if (local->hw.wiphy->interface_modes &(BIT(NL80211_IFTYPE_P2P_GO) | BIT(NL80211_IFTYPE_P2P_CLIENT))) {
+	    result = ieee80211_if_add(local, "p2p%d", NULL,
+		              NL80211_IFTYPE_STATION, NULL);
+		if (result)
+		    wiphy_warn(local->hw.wiphy,
+		           "Failed to add default virtual iface\n");
+	}
+	
+	#endif
 
-	ieee80211_led_init(local);
+	rtnl_unlock();
 
 	local->network_latency_notifier.notifier_call =
 		ieee80211_max_network_latency;

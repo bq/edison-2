@@ -42,8 +42,11 @@
 #define DBG(x...)
 #endif
 #define RT5631_VERSION "0.01 alsa 1.0.24"
-
+#if defined(CONFIG_MALATA_C1016)
+#define RT5631_ALC_DAC_FUNC_ENA 1	//ALC functio for DAC
+#else
 #define RT5631_ALC_DAC_FUNC_ENA 0	//ALC functio for DAC
+#endif
 #define RT5631_ALC_ADC_FUNC_ENA 0	//ALC function for ADC
 #define RT5631_SPK_TIMER	1	//if enable this, MUST enable RT5631_EQ_FUNC_ENA first!
 #if defined(CONFIG_FOR_CE)
@@ -185,8 +188,10 @@ struct rt5631_init_reg {
 #endif
 #else
 #ifndef DEF_VOL
-#ifdef CONFIG_MALATA_D9001
+#if defined(CONFIG_MALATA_D9001)
 #define DEF_VOL					0xc3//0xd4 -30dB 0xc0 0dB
+#elif defined(CONFIG_MALATA_C1016)
+#define DEF_VOL					0xc5//0xd4 -30dB 0xc0 0dB
 #else
 #define DEF_VOL					0xc6//0xd4 -30dB 0xc0 0dB
 #endif
@@ -194,19 +199,19 @@ struct rt5631_init_reg {
 #endif
 #ifndef DEF_VOL_SPK
 #ifdef CONFIG_MALATA_C7019A
-#define DEF_VOL_SPK				0xca
+#define DEF_VOL_SPK				0xc7
 #elif defined(CONFIG_MALATA_D9001)
 #define DEF_VOL_SPK				0xc8
 #elif defined(CONFIG_MALATA_C7011)
 #define DEF_VOL_SPK				0xcc
 #elif defined(CONFIG_MALATA_D7006)  ||defined(CONFIG_MALATA_D7007)
-#define DEF_VOL_SPK				0xca
+#define DEF_VOL_SPK				0xcb
 #elif defined(CONFIG_MALATA_D8005)
-#define DEF_VOL_SPK				0xca
+#define DEF_VOL_SPK				0xcb
 #elif defined(CONFIG_MALATA_D7008)
-#define DEF_VOL_SPK				0xca
+#define DEF_VOL_SPK				0xcb
 #else
-#define DEF_VOL_SPK				0xc8
+#define DEF_VOL_SPK				0xca
 #endif
 #endif
 
@@ -233,6 +238,8 @@ static struct rt5631_init_reg init_list[] = {
 	//{RT5631_STEREO_DAC_VOL_1	, 0x004C},
 #if defined(CONFIG_MALATA_C7011)
 	{RT5631_STEREO_DAC_VOL_2	, 0x0303},
+#elif defined(CONFIG_MALATA_C1016)
+	{RT5631_STEREO_DAC_VOL_2	, 0x0808},
 #else
 	{RT5631_STEREO_DAC_VOL_2	, 0x0000},
 #endif
@@ -276,7 +283,9 @@ static struct rt5631_init_reg init_list[] = {
 	{RT5631_SPK_MONO_OUT_CTRL	, 0x6c00},//Speaker volume-->SPOMixer(L-->L,R-->R)
 #endif
 #if defined(CONFIG_MALATA_D7006)  ||defined(CONFIG_MALATA_D7007) || defined(CONFIG_MALATA_D8005) || defined(CONFIG_MALATA_D7008)
-	{RT5631_GEN_PUR_CTRL_REG	, 0x1e00},//Speaker AMP ratio gain is 1.09x
+	{RT5631_GEN_PUR_CTRL_REG	, 0x4e00},//Speaker AMP ratio gain is 1.09x
+#elif defined(CONFIG_MALATA_D1016)
+	{RT5631_GEN_PUR_CTRL_REG	, 0x6e00},//Speaker AMP ratio gain is 1.99x
 #else
 	{RT5631_GEN_PUR_CTRL_REG	, 0x4e00},//Speaker AMP ratio gain is 1.27x
 #endif
@@ -809,8 +818,8 @@ static void rt5631_alc_enable(struct snd_soc_codec *codec,unsigned int EnableALC
 		rt5631_write_index(codec, 0x21,0x5000);
 		rt5631_write_index(codec, 0x22,0xa480);
 		rt5631_write_index(codec, 0x23,0x0a08);
-		rt5631_write(codec, 0x0c,0x0010);
-		rt5631_write(codec, 0x66,0x650a);
+		rt5631_write(codec, 0x0c,0x0006);
+		rt5631_write(codec, 0x66,0x600A);
 		
 	}
 	else
@@ -2588,3 +2597,4 @@ module_exit(rt5631_modexit);
 MODULE_DESCRIPTION("ASoC RT5631 driver");
 MODULE_AUTHOR("flove <flove@realtek.com>");
 MODULE_LICENSE("GPL");
+

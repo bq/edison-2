@@ -11,6 +11,16 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
+config CT36X_TS
+	tristate "CT36X touchscreens support"
+
+config TOUCHSCREEN_GSLX680
+		tristate "gslX680 touchscreen panel support "
+		depends on I2C2_RK29 || I2C2_RK30
+config TOUCHSCREEN_GSLX680_RK3168
+		tristate "gslX680 rk3168 touchscreen panel support "
+		depends on I2C2_RK29 || I2C2_RK30
+
 config TOUCHSCREEN_XPT2046_SPI
 	tristate "XPT2046 based touchscreens:SPI Interface"
 	depends on SPIM_RK29
@@ -135,6 +145,9 @@ config TOUCHSCREEN_GT8XX
                 default 800
                 help
                   goodix touch max y resolution
+
+config TOUCHSCREEN_CT36X
+	tristate "CT36X based touchscreens"
 
 config RK28_I2C_TS_NTP070
 	tristate "NTP070 based touchscreens: NTP070 Interface"
@@ -986,10 +999,21 @@ config TOUCHSCREEN_GT801_IIC
 	tristate "GT801_IIC based touchscreens"
 	depends on I2C2_RK29
 
+config TOUCHSCREEN_GT811_IIC
+	tristate "GT811_IIC based touchscreens"
+	depends on I2C2_RK29 || I2C2_RK30
+
+config TOUCHSCREEN_86V_GT811_IIC
+	tristate "RK3168_86V GT811_IIC based touchscreens"
+	depends on I2C2_RK29 || I2C2_RK30
+		
+config TOUCHSCREEN_GT82X_IIC
+	tristate "GT82x_IIC based touchscreens"
+	depends on I2C2_RK30
+
 config TOUCHSCREEN_GT818_IIC
 	tristate "GT818_IIC based touchscreens"
 	depends on I2C2_RK29
-
 config TOUCHSCREEN_GT811_MALATA
 	tristate "GT811_IIC malata based touchscreens"
 	config SENSOR_BEITAI
@@ -1032,12 +1056,37 @@ config TOUCHSCREEN_GT819
 	tristate "GT819 based touchscreens"
 	depends on I2C2_RK29
 
+
+config TOUCHSCREEN_GT8110
+        tristate "GT8110 based touchscreens"
+        depends on I2C2_RK29 || I2C_RK30
+
+config TOUCHSCREEN_CT360_IIC
+	tristate "CT360 based touchscreens"
+	depends on I2C_RK29 || I2C_RK30
+
 config TOUCHSCREEN_FT5306
 	tristate "FT5306 based touchscreens: FT5306 Interface"
 	depends on I2C2_RK29 || I2C2_RK30
 
+config TOUCHSCREEN_I30
+	tristate "i30 based touchscreens: i30(ft5306) Interface"
+	depends on I2C2_RK29 || I2C2_RK30
+
+config TOUCHSCREEN_BYD693X
+	tristate "touchscreen BYD693X I2C Interface"
+	depends on I2C2_RK29 || I2C2_RK30
+
+config TOUCHSCREEN_SITRONIX_A720
+	tristate "SITRONIX based touchscreens: SITRONIX Interface for a720"
+	depends on I2C2_RK29 || I2C2_RK30 
+
 config TOUCHSCREEN_FT5306_WPX2
         tristate "FT5306 based touchscreens: FT5306 Interface,only used for umeox wpx2 board"
+        depends on I2C2_RK29 || I2C2_RK30
+
+config TOUCHSCREEN_FT5306_AV
+        tristate "FT5306 based touchscreens: FT5306 Interface base on AV-Display factory 1204*600"
         depends on I2C2_RK29 || I2C2_RK30
 
 config TOUCHSCREEN_FT5406
@@ -1050,6 +1099,10 @@ config TOUCHSCREEN_FT5406
 
 	  If unsure, say N(but it's safe to say "Y").
 
+config TOUCHSCREEN_FT5X0X
+		tristate "ft5x0x touchscreen panel support "
+		depends on I2C2_RK29 || I2C2_RK30
+
 config TOUCHSCREEN_FT5606_MALATA
 	tristate "Malata FT5406 touchscreens: FT5406 Interface"
 	depends on I2C2_RK30
@@ -1059,7 +1112,7 @@ config TOUCHSCREEN_FT5606_MALATA
 	  in its table of I2C devices.
 
 	  If unsure, say N(but it's safe to say "Y").
-  
+
 config ATMEL_MXT1386
         tristate "ATMEL_MXT1386 touchscreen panel support"
         depends on I2C

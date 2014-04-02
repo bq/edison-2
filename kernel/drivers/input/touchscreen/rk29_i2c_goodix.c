@@ -715,10 +715,10 @@ static int goodix_ts_init(struct rk_ts_data *ts)
 	{
 		printk(KERN_INFO"Read version data failed!\n");
 	}
-//	else
-//	{
-//		printk("goodix_ts_init: version %s\n", (version_info+1));
-//	}
+	else
+	{
+		printk("goodix_ts_init: version %s\n", (version_info+1));
+	}
 	vfree(version_info);
 	#ifdef CONFIG_TOUCHSCREEN_GOODIX_IAP
 	goodix_proc_entry = create_proc_entry("goodix-update", 0666, NULL);
@@ -754,7 +754,11 @@ static int rk_ts_probe(struct i2c_client *client, const struct i2c_device_id *id
 {
 	int ret = 0;
 	struct rk_ts_data *ts;
-	struct goodix_platform_data *pdata ;
+	#ifdef CONFIG_MACH_RK_FAC
+		struct tp_platform_data *pdata;  
+	#else 
+		struct goodix_platform_data *pdata ;
+	#endif
 	
 	printk(KERN_INFO "Install touch driver.\n");
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) 
@@ -773,7 +777,11 @@ static int rk_ts_probe(struct i2c_client *client, const struct i2c_device_id *id
 
 	pdata = client->dev.platform_data;
 	ts->irq_pin = pdata->irq_pin;
+#ifdef CONFIG_MACH_RK_FAC
+	ts->rst_pin = pdata->reset_pin;
+#else
 	ts->rst_pin = pdata->rest_pin;
+#endif
 	ts->pendown =PEN_RELEASE;
 	ts->client = client;
 	ts->ts_init = goodix_ts_init;	
@@ -855,6 +863,9 @@ static int rk_ts_probe(struct i2c_client *client, const struct i2c_device_id *id
 
 	
 err_input_register_device_failed:
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	unregister_early_suspend(&ts->early_suspend);
+#endif
 	input_free_device(ts->input_dev);
 	i2c_set_clientdata(client, NULL);	
 	kfree(ts);

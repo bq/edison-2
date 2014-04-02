@@ -6,7 +6,7 @@ o* Driver for MT9M001 CMOS Image Sensor from Micron
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- */
+ */   //
 
 #include <linux/videodev2.h>
 #include <linux/slab.h>
@@ -60,7 +60,7 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_Brightness	0
 #define CONFIG_SENSOR_Contrast      0
 #define CONFIG_SENSOR_Saturation    0
-#define CONFIG_SENSOR_Effect        1
+#define CONFIG_SENSOR_Effect        0
 #define CONFIG_SENSOR_Scene         1
 #define CONFIG_SENSOR_DigitalZoom   0
 #define CONFIG_SENSOR_Focus         0
@@ -122,7 +122,11 @@ static struct reginfo sensor_init_data[] =
 	{0x3630, 0x20},
 	{0x4702, 0x02},
 	{0x370c, 0x34},
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0x3004, 0x20},
+	#else
 	{0x3004, 0x10},
+	#endif
 	{0x3005, 0x18},
 	{0x3800, 0x00},
 	{0x3801, 0x00},
@@ -154,6 +158,7 @@ static struct reginfo sensor_init_data[] =
 	{0x3a0e, 0x06},
 	{0x3a14, 0x02},
 	{0x3a15, 0x28},
+		{0x3a19,0x40},   // hhs
 		{0x4708, 0x01},
 	{0x3623, 0x00},
 	{0x3634, 0x76},
@@ -162,8 +167,13 @@ static struct reginfo sensor_init_data[] =
 	{0x3703, 0x24},
 	{0x3704, 0x24},
 	{0x3705, 0x0c},
+	#if defined(CONFIG_MALATA_D7803) || defined(CONFIG_MALATA_D7005)
+	{0x3820, 0x87},
+	{0x3821, 0x07},
+	#else
 	{0x3820, 0x81},
 	{0x3821, 0x01},
+	#endif
 	{0x370a, 0x52},
 	{0x4608, 0x00},
 	{0x4609, 0x80},
@@ -274,7 +284,11 @@ static struct reginfo sensor_init_data[] =
 	{0x5061, 0x7d},
 	{0x5062, 0x7d},
 	{0x5063, 0x69},
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0x3004, 0x40},
+	#else
 	{0x3004, 0x20},
+	#endif
 		{0x0100, 0x01},
 
 	{0x0000, 0x00}
@@ -295,7 +309,11 @@ static struct reginfo sensor_720p[]=
 	{0x3630, 0x20	},
 	{0x4702, 0x02	},
 	{0x370c, 0x34	},
-	{0x3004, 0x10	},
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0x3004, 0x20},
+	#else
+	{0x3004, 0x10},
+	#endif
 	{0x3005, 0x24	},
 	{0x3800, 0x00	},
 	{0x3801, 0xa0	},
@@ -335,8 +353,13 @@ static struct reginfo sensor_720p[]=
 	{0x3703, 0x48	},
 	{0x3704, 0x48	},
 	{0x3705, 0x18	},
+	#if defined(CONFIG_MALATA_D7803) || defined(CONFIG_MALATA_D7005)
+	{0x3820, 0x86	},
+	{0x3821, 0x06	},
+	#else
 	{0x3820, 0x80	},
 	{0x3821, 0x00	},
+	#endif
 	{0x370a, 0x12	},
 	{0x4608, 0x00	},
 	{0x4609, 0x80	},
@@ -547,12 +570,22 @@ static struct reginfo sensor_uxga[] =
     {0x3634, 0x44}, 
     {0x3701, 0x44}, 
     {0x3208, 0xa2}, 
-    {0x3705, 0x18},      
-    {0x3820, 0x80}, 
-    {0x3821, 0x00}, 
+    {0x3705, 0x18},
+    #if defined(CONFIG_MALATA_D7803) || defined(CONFIG_MALATA_D7005)
+    {0x3820, 0x86},
+    {0x3821, 0x06},
+    #else
+    {0x3820, 0x80},
+    {0x3821, 0x00},
+    #endif
+
 
     {0x3003, 0x80},//10fps 
-    {0x3004, 0x20}, //10         
+    #if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0x3004, 0x40},
+	#else
+	{0x3004, 0x20},
+	#endif
     {0x3005, 0x18}, 
     {0x3006, 0x0d}, 
 
@@ -630,14 +663,23 @@ static struct reginfo sensor_svga[] =
 	{0x3703, 0x24},
 	{0x3704, 0x24},
 	{0x3705, 0x0c},
-	{0x3820, 0x81},
-	{0x3821, 0x01},
+	 #if defined(CONFIG_MALATA_D7803) || defined(CONFIG_MALATA_D7005)
+    {0x3820, 0x87},
+    {0x3821, 0x07},
+    #else
+    {0x3820, 0x81},
+    {0x3821, 0x01},
+    #endif
 	{0x370a, 0x52},
 	{0x4608, 0x00},
 	{0x4609, 0x80},
 	{0x5002, 0x10},
 	{0x3005, 0x18},
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0x3004, 0x40},
+	#else
 	{0x3004, 0x20},
+	#endif
 	{0x3503,0x00},
 	{0x0100, 0x01},		//software wake
 	{0x0000, 0x00}
@@ -1050,13 +1092,17 @@ static struct reginfo *sensor_FlipSeqe[] = {sensor_FlipOff, sensor_FlipOn,NULL,}
 #if CONFIG_SENSOR_Scene
 static  struct reginfo sensor_SceneAuto[] =
 {
-    {0x3a00, 0x78},
+    {0x3a00, 0x78},  
+    {0x3a02, 0x02},  
+    {0x3a03, 0x68},  
+    {0x3a14, 0x02},  
+    {0x3a15, 0x28},  
     {0x0000, 0x00}
 };
 
 static  struct reginfo sensor_SceneNight[] =
 {
-    {0x3003, 0x80},
+       {0x3003, 0x80},
 	{0x3004, 0x20},
 	{0x3005, 0x18},
 	{0x3006, 0x0d},
@@ -1065,7 +1111,7 @@ static  struct reginfo sensor_SceneNight[] =
 	{0x3a03 ,0x38},
 	{0x3a14 ,0x07},
 	{0x3a15 ,0x38},
-    {0x0000, 0x00}
+       {0x0000, 0x00}
 };
 static struct reginfo *sensor_SceneSeqe[] = {sensor_SceneAuto, sensor_SceneNight,NULL,};
 
@@ -1290,6 +1336,9 @@ static int sensor_suspend(struct soc_camera_device *icd, pm_message_t pm_msg);
 static int sensor_resume(struct soc_camera_device *icd);
 static int sensor_set_bus_param(struct soc_camera_device *icd,unsigned long flags);
 static unsigned long sensor_query_bus_param(struct soc_camera_device *icd);
+#if CONFIG_SENSOR_Scene
+static int sensor_set_scene(struct soc_camera_device *icd, const struct v4l2_queryctrl *qctrl, int value);
+#endif
 #if CONFIG_SENSOR_Effect
 static int sensor_set_effect(struct soc_camera_device *icd, const struct v4l2_queryctrl *qctrl, int value);
 #endif
@@ -1904,7 +1953,7 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
     }
 
     pid |= (value & 0xff);
-    SENSOR_DG("\n %s  pid = 0x%x\n", SENSOR_NAME_STRING(), pid);
+    SENSOR_TR("\n %s() %s  pid = 0x%x\n",__func__, SENSOR_NAME_STRING(), pid);
     if (pid == SENSOR_ID) {
         sensor->model = SENSOR_V4L2_IDENT;
     } else {
@@ -2266,8 +2315,8 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
 
 		if (sensor_fmt_capturechk(sd,mf) == true) {				    /* ddl@rock-chips.com : Capture */
             sensor_ae_transfer(client);
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
 			if (sensor->info_priv.whiteBalance != 0) {
 				qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 				sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
@@ -2276,15 +2325,19 @@ static int sensor_s_fmt(struct v4l2_subdev *sd, struct v4l2_mbus_framefmt *mf)
 			sensor->info_priv.snap2preview = true;
 		} else if (sensor_fmt_videochk(sd,mf) == true) {			/* ddl@rock-chips.com : Video */
 			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
 			sensor->info_priv.video2preview = true;
 		} else if ((sensor->info_priv.snap2preview == true) || (sensor->info_priv.video2preview == true)) {
 			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_EFFECT);
-			sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
-			qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
+			//sensor_set_effect(icd, qctrl,sensor->info_priv.effect);
+			//qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_DO_WHITE_BALANCE);
 			sensor_set_whiteBalance(icd, qctrl,sensor->info_priv.whiteBalance);
+			#if CONFIG_SENSOR_Scene
+				qctrl = soc_camera_find_qctrl(&sensor_ops, V4L2_CID_SCENE);  // hhs_0621
+				sensor_set_scene(icd, qctrl,sensor->info_priv.scene);      // hhs_0621
+			#endif
             msleep(600);
 			sensor->info_priv.video2preview = false;
 			sensor->info_priv.snap2preview = false;
@@ -2692,7 +2745,7 @@ static int sensor_set_flash(struct soc_camera_device *icd, const struct v4l2_que
 {    
     if ((value >= qctrl->minimum) && (value <= qctrl->maximum)) {
         if (value == 3) {       /* ddl@rock-chips.com: torch */
-            sensor_ioctrl(icd, Sensor_Flash, Flash_Torch_On);   /* Flash On */
+            sensor_ioctrl(icd, Sensor_Flash, Flash_Torch);   /* Flash On */
         } else {
             sensor_ioctrl(icd, Sensor_Flash, Flash_Off);
         }
@@ -3152,7 +3205,7 @@ static int sensor_video_probe(struct soc_camera_device *icd,
     }
 
     pid |= (value & 0xff);
-    SENSOR_DG("\n %s  pid = 0x%x\n", SENSOR_NAME_STRING(), pid);
+    SENSOR_TR("\n %s() %s  pid = 0x%x\n",__func__, SENSOR_NAME_STRING(), pid);
     if (pid == SENSOR_ID) {
         sensor->model = SENSOR_V4L2_IDENT;
     } else {

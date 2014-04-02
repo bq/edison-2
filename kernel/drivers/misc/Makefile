@@ -1,7 +1,6 @@
 #
 # Makefile for misc devices that really don't fit anywhere else.
 #
-obj-$(CONFIG_INPUT_LIGHTSENSOR_BPW16N)		+= bpw16n.o
 
 obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_AD525X_DPOT)	+= ad525x_dpot.o
@@ -20,7 +19,6 @@ obj-$(CONFIG_PHANTOM)		+= phantom.o
 obj-$(CONFIG_SENSORS_BH1780)	+= bh1780gli.o
 obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
 obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
-obj-$(CONFIG_ANDROID_PMEM)	+= pmem.o
 obj-$(CONFIG_SGI_IOC4)		+= ioc4.o
 obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
 obj-$(CONFIG_KGDB_TESTS)	+= kgdbts.o
@@ -52,12 +50,16 @@ obj-y				+= carma/
 obj-$(CONFIG_WL127X_RFKILL)	+= wl127x-rfkill.o
 obj-$(CONFIG_APANIC)		+= apanic.o
 obj-$(CONFIG_SENSORS_AK8975)	+= akm8975.o
+obj-$(CONFIG_SENSORS_AK8963)   += akm8963.o
 obj-$(CONFIG_MTK23D)		+= mtk23d.o
 obj-$(CONFIG_FM580X)		+= fm580x.o
 obj-$(CONFIG_RK29_SUPPORT_MODEM)	+= rk29_modem/
 obj-$(CONFIG_3G_MODULE)		+= 3g_module/
-obj-$(CONFIG_GPS_GNS7560)	+= gps/
+obj-$(CONFIG_BP_AUTO)		+= bp/
+obj-$(CONFIG_GPS_DEVICES)	+= gps/
 obj-y += inv_mpu/
-obj-$(CONFIG_RK29_NEWTON)	+= newton.o
 obj-$(CONFIG_TDSC8800) += tdsc8800.o
 obj-$(CONFIG_RK29_SC8800)	+=	sc8800.o
+obj-y += rk2928_callpad_misc/
+obj-$(CONFIG_MODEM_SOUND) += modem_sound.o
+obj-$(CONFIG_TCC_BT_DEV)       += tcc_bt_dev.o

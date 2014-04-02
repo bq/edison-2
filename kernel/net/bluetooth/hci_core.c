@@ -510,12 +510,10 @@ int hci_dev_open(__u16 dev)
 
 	hci_req_lock(hdev);
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	if (test_bit(HCI_UNREGISTER, &hdev->flags)) {
 		ret = -ENODEV;
 		goto done;
 	}
-#endif
 
 	if (hdev->rfkill && rfkill_blocked(hdev->rfkill)) {
 		ret = -ERFKILL;
@@ -1572,9 +1570,7 @@ int hci_unregister_dev(struct hci_dev *hdev)
 
 	BT_DBG("%p name %s bus %d", hdev, hdev->name, hdev->bus);
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	set_bit(HCI_UNREGISTER, &hdev->flags);
-#endif
 
 	write_lock_bh(&hci_dev_list_lock);
 	list_del(&hdev->list);
@@ -1584,6 +1580,8 @@ int hci_unregister_dev(struct hci_dev *hdev)
 
 	for (i = 0; i < NUM_REASSEMBLY; i++)
 		kfree_skb(hdev->reassembly[i]);
+
+	cancel_work_sync(&hdev->power_on);
 
 	if (!test_bit(HCI_INIT, &hdev->flags) &&
 					!test_bit(HCI_SETUP, &hdev->flags))

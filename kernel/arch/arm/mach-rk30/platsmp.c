@@ -76,11 +76,12 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 	static bool first = true;
 
 	if (first) {
-		unsigned long sz = 0x100;
+		unsigned long sz = 0x10;
+		unsigned int i, ncores = scu_get_core_count(RK30_SCU_BASE);
 
-		pmu_set_power_domain(PD_A9_1, false);
+		for (i = 1; i < ncores; i++)
+			pmu_set_power_domain(PD_A9_0 + i, false);
 
-		memcpy(RK30_IMEM_BASE + sz - 4, (void *)rk30_sram_secondary_startup + sz - 4, 4);
 		memcpy(RK30_IMEM_BASE, rk30_sram_secondary_startup, sz);
 		flush_icache_range((unsigned long)RK30_IMEM_BASE, (unsigned long)RK30_IMEM_BASE + sz);
 		outer_clean_range(0, sz);
@@ -89,7 +90,7 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 	}
 
 	dsb_sev();
-	pmu_set_power_domain(PD_A9_1, true);
+	pmu_set_power_domain(PD_A9_0 + cpu, true);
 
 	return 0;
 }

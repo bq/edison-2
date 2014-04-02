@@ -57,7 +57,6 @@
 #define REG_DBG_PRINT(args...)
 #endif
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 static struct regulatory_request core_request_world = {
 	.initiator = NL80211_REGDOM_SET_BY_CORE,
 	.alpha2[0] = '0',
@@ -66,14 +65,9 @@ static struct regulatory_request core_request_world = {
 	.processed = true,
 	.country_ie_env = ENVIRON_ANY,
 };
-#endif
 
 /* Receipt of information from last regulatory request */
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 static struct regulatory_request *last_request = &core_request_world;
-#else
-static struct regulatory_request *last_request;
-#endif
 
 /* To trigger userspace events */
 static struct platform_device *reg_pdev;
@@ -131,9 +125,8 @@ static const struct ieee80211_regdomain world_regdom = {
 	.reg_rules = {
 		/* IEEE 802.11b/g, channels 1..11 */
 		REG_RULE(2412-10, 2462+10, 40, 6, 20, 0),
-		/* IEEE 802.11b/g, channels 12..13. No HT40
-		 * channel fits here. */
-		REG_RULE(2467-10, 2472+10, 20, 6, 20,
+		/* IEEE 802.11b/g, channels 12..13. */
+		REG_RULE(2467-10, 2472+10, 40, 6, 20,
 			NL80211_RRF_PASSIVE_SCAN |
 			NL80211_RRF_NO_IBSS),
 		/* IEEE 802.11 channel 14 - Only JP enables
@@ -165,11 +158,7 @@ static char user_alpha2[2];
 module_param(ieee80211_regdom, charp, 0444);
 MODULE_PARM_DESC(ieee80211_regdom, "IEEE 802.11 regulatory domain code");
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 static void reset_regdomains(bool full_reset)
-#else
-static void reset_regdomains(void)
-#endif
 {
 	/* avoid freeing static information or freeing something twice */
 	if (cfg80211_regdomain == cfg80211_world_regdom)
@@ -185,14 +174,12 @@ static void reset_regdomains(void)
 	cfg80211_world_regdom = &world_regdom;
 	cfg80211_regdomain = NULL;
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	if (!full_reset)
 		return;
 
 	if (last_request != &core_request_world)
 		kfree(last_request);
 	last_request = &core_request_world;
-#endif
 }
 
 /*
@@ -203,11 +190,7 @@ static void update_world_regdomain(const struct ieee80211_regdomain *rd)
 {
 	BUG_ON(!last_request);
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	reset_regdomains(false);
-#else
-	reset_regdomains();
-#endif
 
 	cfg80211_world_regdom = rd;
 	cfg80211_regdomain = rd;
@@ -347,11 +330,9 @@ static void reg_regdb_search(struct work_struct *work)
 	struct reg_regdb_search_request *request;
 	const struct ieee80211_regdomain *curdom, *regdom;
 	int i, r;
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	bool set_reg = false;
 
 	mutex_lock(&cfg80211_mutex);
-#endif
 
 	mutex_lock(&reg_regdb_search_mutex);
 	while (!list_empty(&reg_regdb_search_list)) {
@@ -367,13 +348,7 @@ static void reg_regdb_search(struct work_struct *work)
 				r = reg_copy_regd(&regdom, curdom);
 				if (r)
 					break;
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 				set_reg = true;
-#else
-				mutex_lock(&cfg80211_mutex);
-				set_regdom(regdom);
-				mutex_unlock(&cfg80211_mutex);
-#endif
 				break;
 			}
 		}
@@ -382,12 +357,10 @@ static void reg_regdb_search(struct work_struct *work)
 	}
 	mutex_unlock(&reg_regdb_search_mutex);
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	if (set_reg)
 		set_regdom(regdom);
 
 	mutex_unlock(&cfg80211_mutex);
-#endif
 }
 
 static DECLARE_WORK(reg_regdb_work, reg_regdb_search);
@@ -412,18 +385,14 @@ static void reg_regdb_query(const char *alpha2)
 	schedule_work(&reg_regdb_work);
 }
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 /* Feel free to add any other sanity checks here */
 static void reg_regdb_size_check(void)
 {
 	/* We should ideally BUILD_BUG_ON() but then random builds would fail */
 	WARN_ONCE(!reg_regdb_size, "db.txt is empty, you should update it...");
 }
-#endif
 #else
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 static inline void reg_regdb_size_check(void) {}
-#endif
 static inline void reg_regdb_query(const char *alpha2) {}
 #endif /* CONFIG_CFG80211_INTERNAL_REGDB */
 
@@ -1394,11 +1363,7 @@ static void reg_set_request_processed(void)
 	spin_unlock(&reg_requests_lock);
 
 	if (last_request->initiator == NL80211_REGDOM_SET_BY_USER)
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 		cancel_delayed_work(&reg_timeout);
-#else
-		cancel_delayed_work_sync(&reg_timeout);
-#endif
 
 	if (need_more_processing)
 		schedule_work(&reg_work);
@@ -1460,9 +1425,7 @@ static int __regulatory_hint(struct wiphy *wiphy,
 	}
 
 new_request:
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	if (last_request != &core_request_world)
-#endif
 		kfree(last_request);
 
 	last_request = pending_request;
@@ -1632,12 +1595,6 @@ static void queue_regulatory_request(struct regulatory_request *request)
 static int regulatory_hint_core(const char *alpha2)
 {
 	struct regulatory_request *request;
-
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
-#else
-	kfree(last_request);
-	last_request = NULL;
-#endif
 
 	request = kzalloc(sizeof(struct regulatory_request),
 			  GFP_KERNEL);
@@ -1837,11 +1794,7 @@ static void restore_regulatory_settings(bool reset_user)
 	mutex_lock(&cfg80211_mutex);
 	mutex_lock(&reg_mutex);
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	reset_regdomains(true);
-#else
-	reset_regdomains();
-#endif
 	restore_alpha2(alpha2, reset_user);
 
 	/*
@@ -2103,24 +2056,18 @@ static int __set_regdom(const struct ieee80211_regdomain *rd)
 	}
 
 	request_wiphy = wiphy_idx_to_wiphy(last_request->wiphy_idx);
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	if (!request_wiphy &&
 	    (last_request->initiator == NL80211_REGDOM_SET_BY_DRIVER ||
 	     last_request->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE)) {
 		schedule_delayed_work(&reg_timeout, 0);
 		return -ENODEV;
 	}
-#endif
 
 	if (!last_request->intersect) {
 		int r;
 
 		if (last_request->initiator != NL80211_REGDOM_SET_BY_DRIVER) {
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 			reset_regdomains(false);
-#else
-			reset_regdomains();
-#endif
 			cfg80211_regdomain = rd;
 			return 0;
 		}
@@ -2141,11 +2088,7 @@ static int __set_regdom(const struct ieee80211_regdomain *rd)
 		if (r)
 			return r;
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 		reset_regdomains(false);
-#else
-		reset_regdomains();
-#endif
 		cfg80211_regdomain = rd;
 		return 0;
 	}
@@ -2170,11 +2113,7 @@ static int __set_regdom(const struct ieee80211_regdomain *rd)
 
 		rd = NULL;
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 		reset_regdomains(false);
-#else
-		reset_regdomains();
-#endif
 		cfg80211_regdomain = intersected_rd;
 
 		return 0;
@@ -2194,11 +2133,7 @@ static int __set_regdom(const struct ieee80211_regdomain *rd)
 	kfree(rd);
 	rd = NULL;
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	reset_regdomains(false);
-#else
-	reset_regdomains();
-#endif
 	cfg80211_regdomain = intersected_rd;
 
 	return 0;
@@ -2306,9 +2241,7 @@ int __init regulatory_init(void)
 	spin_lock_init(&reg_requests_lock);
 	spin_lock_init(&reg_pending_beacons_lock);
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	reg_regdb_size_check();
-#endif
 
 	cfg80211_regdomain = cfg80211_world_regdom;
 
@@ -2355,15 +2288,9 @@ void /* __init_or_exit */ regulatory_exit(void)
 	mutex_lock(&cfg80211_mutex);
 	mutex_lock(&reg_mutex);
 
-#if defined(CONFIG_MT5931) || defined(CONFIG_MT5931_MT6622)
 	reset_regdomains(true);
 
 	dev_set_uevent_suppress(&reg_pdev->dev, true);
-#else
-	reset_regdomains();
-
-	kfree(last_request);
-#endif
 
 	platform_device_unregister(reg_pdev);
 

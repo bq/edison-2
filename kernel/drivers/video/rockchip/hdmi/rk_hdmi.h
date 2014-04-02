@@ -239,6 +239,7 @@ struct hdmi_edid {
 	struct list_head modelist;			//Device supported display mode list
 	struct hdmi_audio *audio;			//Device supported audio info
 	int	audio_num;						//Device supported audio type number
+	int	base_audio_support;				//Device supported base audio
 };
 
 /* RK HDMI Video Configure Parameters */
@@ -301,6 +302,7 @@ struct hdmi {
 	int (*detect_hotplug)(void);
 	// call back for edid
 	int (*read_edid)(int block, unsigned char *buff);
+	int (*set_vif)(rk_screen * screen,bool connect);
 
 	// call back for hdcp operatoion
 	void (*hdcp_cb)(void);

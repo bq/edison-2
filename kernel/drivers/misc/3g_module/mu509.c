@@ -202,32 +202,23 @@ static int mu509_probe(struct platform_device *pdev)
 	pdata->dev = &pdev->dev;
 	if(pdata->io_init)
 		pdata->io_init();
+	gpio_set_value(pdata->modem_power_en, GPIO_HIGH);
+	msleep(1000);
+	modem_poweron_off(1);
+	modem_status = 1;
+	
+	register_early_suspend(&mu509_early_suspend);
 	mu509_data = kzalloc(sizeof(struct modem_dev), GFP_KERNEL);
 	if(mu509_data == NULL)
 	{
 		printk("failed to request mu509_data\n");
-		goto err0;
+		goto err2;
 	}
-	platform_set_drvdata(pdev, mu509_data);	
-	result = gpio_request(pdata->modem_power_en,"modem_power_en");
-	if(result){
-			printk("failed to request modem_power_en gpio\n");
-			goto err1;
-		}
-	gpio_set_value(pdata->modem_power_en, GPIO_HIGH);
-	result = gpio_request(pdata->bp_power,"modem_power");
-  if(result){
-  		printk("failed to request modem_power gpio\n");
-			goto err2;
-  	}
-
-	
-	register_early_suspend(&mu509_early_suspend);
-	
+	platform_set_drvdata(pdev, mu509_data);		
 	result = gpio_request(pdata->ap_wakeup_bp, "mu509");
 	if (result) {
 		printk("failed to request AP_BP_WAKEUP gpio\n");
-		goto err3;
+		goto err1;
 	}	
 	irq	= gpio_to_irq(pdata->bp_wakeup_ap);
 	enable_irq_wake(irq);
@@ -247,13 +238,9 @@ static int mu509_probe(struct platform_device *pdev)
 	if (result < 0) {
 		printk("%s: request_irq(%d) failed\n", __func__, irq);
 		gpio_free(pdata->bp_wakeup_ap);
-		goto err4;
+		goto err0;
 	}
 	enable_irq_wake(gpio_to_irq(pdata->bp_wakeup_ap)); 
-	
-	msleep(1000);
-	modem_poweron_off(1);
-	modem_status = 1;
 
 	result = misc_register(&mu509_misc);
 	if(result)
@@ -262,16 +249,12 @@ static int mu509_probe(struct platform_device *pdev)
 	}	
 	return result;
 err0:
-	kfree(mu509_data);
-err1:
-	gpio_free(pdata->modem_power_en);
-err2:
-	gpio_free(pdata->bp_power);
-err3:
-	gpio_free(pdata->ap_wakeup_bp);
-err4:
 	cancel_work_sync(&mu509_data->work);
-	gpio_free(pdata->bp_wakeup_ap);	
+	gpio_free(pdata->bp_wakeup_ap);
+err1:
+	gpio_free(pdata->ap_wakeup_bp);
+err2:
+	kfree(mu509_data);
 	return 0;
 }
 
@@ -310,7 +293,6 @@ void mu509_shutdown(struct platform_device *pdev)
 	struct modem_dev *mu509_data = platform_get_drvdata(pdev);
 	
 	modem_poweron_off(0);
-	gpio_set_value(pdata->modem_power_en, GPIO_LOW);
 
 	if(pdata->io_deinit)
 		pdata->io_deinit();

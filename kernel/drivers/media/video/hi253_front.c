@@ -20,7 +20,6 @@ o* Driver for MT9M001 CMOS Image Sensor from Micron
 #include <media/v4l2-chip-ident.h>
 #include <media/soc_camera.h>
 #include <plat/rk_camera.h>
-
 static int debug;
 module_param(debug, int, S_IRUGO|S_IWUSR);
 
@@ -59,11 +58,11 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_Brightness	0
 #define CONFIG_SENSOR_Contrast      0
 #define CONFIG_SENSOR_Saturation    0
-#define CONFIG_SENSOR_Effect        1
+#define CONFIG_SENSOR_Effect        0
 #define CONFIG_SENSOR_Scene         0
 #define CONFIG_SENSOR_DigitalZoom   0
 #define CONFIG_SENSOR_Focus         0
-#define CONFIG_SENSOR_Exposure      1
+#define CONFIG_SENSOR_Exposure      0
 #define CONFIG_SENSOR_Flash         0
 #define CONFIG_SENSOR_Mirror        0
 #define CONFIG_SENSOR_Flip          0
@@ -158,8 +157,16 @@ static struct reginfo sensor_init_data[] =
 	//Page 00
 	{0x03, 0x00}, 
 	{0x10, 0x00}, //lxh
-	{0x11, 0x90}, 
-	{0x12, 0x04}, 
+	#if defined(CONFIG_MALATA_D7803) || defined(CONFIG_MALATA_D7005)
+	{0x11, 0x93},
+	#else
+	{0x11, 0x90},
+	#endif
+	#if defined(CONFIG_CAMERA_EMI_ENABLE)
+	{0x12, 0x05},
+	#else
+	{0x12,0x04},
+	#endif
 	{0x0b, 0xaa}, 
 	{0x0c, 0xaa}, 
 	{0x0d, 0xaa}, 
@@ -1306,7 +1313,7 @@ static  struct reginfo sensor_WhiteB_Cloudy[]=
 	{0x86, 0x24},
 	{END_REG, END_REG},
 };
-/* ClearDay Colour Temperature : 5000K - 6500K  */		//riguang
+/* ClearDay Colour Temperature : 5000K - 6500K  */
 static  struct reginfo sensor_WhiteB_ClearDay[]=
 {
     //Sunny
@@ -1321,8 +1328,7 @@ static  struct reginfo sensor_WhiteB_ClearDay[]=
 	{0x86, 0x24},
 	{END_REG, END_REG},
 };
-
-/* Home Colour Temperature : 2500K - 3500K  */		//baizhiguang
+/* Office Colour Temperature : 3500K - 5000K  */
 static  struct reginfo sensor_WhiteB_TungstenLamp1[]=
 {
     //incandescense
@@ -1336,9 +1342,9 @@ static  struct reginfo sensor_WhiteB_TungstenLamp1[]=
 	{0x85, 0x50},
 	{0x86, 0x50},
 	{END_REG, END_REG},
-};
 
-/* Office Colour Temperature : 3500K - 5000K  */		//yingguang
+};
+/* Home Colour Temperature : 2500K - 3500K  */
 static  struct reginfo sensor_WhiteB_TungstenLamp2[]=
 {
     //Home
@@ -1657,13 +1663,15 @@ static struct reginfo *sensor_FlipSeqe[] = {sensor_FlipOff, sensor_FlipOn,NULL,}
 #if CONFIG_SENSOR_Scene
 static  struct reginfo sensor_SceneAuto[] =
 {
-
+	{0x03, 0x00}, 
+	{0x12,0x04},
 	{END_REG, END_REG},	
 };
 
 static  struct reginfo sensor_SceneNight[] =
 {
-
+	{0x03, 0x00}, 
+	{0x12,0x05},
 	{END_REG, END_REG},
 };
 static struct reginfo *sensor_SceneSeqe[] = {sensor_SceneAuto, sensor_SceneNight,NULL,};
@@ -2241,7 +2249,7 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
     }
 
    
-    SENSOR_DG("\n %s  pid = 0x%x\n", SENSOR_NAME_STRING(), value);
+    SENSOR_TR("\n %s() %s  pid = 0x%x\n",__func__, SENSOR_NAME_STRING(), value);
     if (value == SENSOR_ID) {
         sensor->model = SENSOR_V4L2_IDENT;
     } else {
@@ -3384,7 +3392,7 @@ static int sensor_video_probe(struct soc_camera_device *icd,
         goto sensor_video_probe_err;
     }
 
-    SENSOR_DG("\n %s  pid = 0x%x\n", SENSOR_NAME_STRING(), value);
+    SENSOR_TR("\n %s() %s  pid = 0x%x\n",__func__, SENSOR_NAME_STRING(), value);
     if (value == SENSOR_ID) {
         sensor->model = SENSOR_V4L2_IDENT;
     } else {
@@ -3405,9 +3413,9 @@ static long sensor_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
     struct soc_camera_device *icd = client->dev.platform_data;
     struct sensor *sensor = to_sensor(client);
     int ret = 0;
-#if CONFIG_SENSOR_Flash	
+//#if CONFIG_SENSOR_Flash	
     int i;
-#endif
+//#endif
     
 	SENSOR_DG("\n%s..%s..cmd:%x \n",SENSOR_NAME_STRING(),__FUNCTION__,cmd);
 	switch (cmd)

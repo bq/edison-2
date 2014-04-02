@@ -42,7 +42,9 @@
  */
 #define DRIVER_AUTHOR "Greg Kroah-Hartman, greg@kroah.com, http://www.kroah.com/linux/"
 #define DRIVER_DESC "USB Serial Driver core"
-
+#ifdef CONFIG_BP_AUTO
+extern int get_current_bp_id();
+#endif
 /* Driver structure we register with the USB core */
 static struct usb_driver usb_serial_driver = {
 	.name =		"usbserial",
@@ -53,22 +55,11 @@ static struct usb_driver usb_serial_driver = {
 	.no_dynamic_id = 	1,
 	.supports_autosuspend =	1,
 };
-#ifdef CONFIG_MU509
-static int MU509_USB = 0;
-#define MU509_USB_PORT     (SERIAL_TTY_MINORS - 10)
+#ifdef CONFIG_BP_AUTO
+static int BP_USB = 0;
+#define BP_USB_PORT     (SERIAL_TTY_MINORS - 10)
 #endif
-#ifdef CONFIG_MW100
-static int MW100_USB = 0;
-#define MW100_USB_PORT     (SERIAL_TTY_MINORS - 10)
-#endif
-#ifdef CONFIG_MT6229
-static int MT6229_USB = 0;
-#define MT6229_USB_PORT     (SERIAL_TTY_MINORS - 10)
-#endif
-#ifdef CONFIG_SEW868
-static int SEW868_USB = 0;
-#define SEW868_USB_PORT     (SERIAL_TTY_MINORS - 10)
-#endif
+
 
 /* There is no MODULE_DEVICE_TABLE for usbserial.c.  Instead
    the MODULE_DEVICE_TABLE declarations in each serial driver
@@ -119,22 +110,11 @@ static struct usb_serial *get_free_serial(struct usb_serial *serial,
 
 	*minor = 0;
 	mutex_lock(&table_lock);
-#ifdef CONFIG_MU509
-	if (MU509_USB)
-		a= MU509_USB_PORT;
+#ifdef CONFIG_BP_AUTO
+	if (BP_USB)
+		a= BP_USB_PORT;
 #endif
-#ifdef CONFIG_MW100	
-	if (MW100_USB)		
-		a= MW100_USB_PORT;
-#endif
-#ifdef CONFIG_MT6229	
-	if (MT6229_USB)		
-		a= MT6229_USB_PORT;
-#endif
-#ifdef CONFIG_SEW868	
-	if (SEW868_USB)		
-		a= SEW868_USB_PORT;
-#endif
+
 	for (i = a; i < SERIAL_TTY_MINORS; ++i) {
 		if (serial_table[i])
 			continue;
@@ -702,12 +682,14 @@ exit:
 static struct usb_serial_driver *search_serial_device(
 					struct usb_interface *iface)
 {
-	const struct usb_device_id *id;
+	const struct usb_device_id *id = NULL;
 	struct usb_serial_driver *drv;
+	struct usb_driver *driver = to_usb_driver(iface->dev.driver);
 
 	/* Check if the usb id matches a known device */
 	list_for_each_entry(drv, &usb_serial_driver_list, driver_list) {
-		id = get_iface_id(drv, iface);
+		if (drv->usb_driver == driver)
+			id = get_iface_id(drv, iface);
 		if (id)
 			return drv;
 	}
@@ -795,7 +777,7 @@ int usb_serial_probe(struct usb_interface *interface,
 
 		if (retval) {
 			dbg("sub driver rejected device");
-			kfree(serial);
+			usb_serial_put(serial);
 			module_put(type->driver.owner);
 			return retval;
 		}
@@ -867,7 +849,7 @@ int usb_serial_probe(struct usb_interface *interface,
 		 */
 		if (num_bulk_in == 0 || num_bulk_out == 0) {
 			dev_info(&interface->dev, "PL-2303 hack: descriptors matched but endpoints did not\n");
-			kfree(serial);
+			usb_serial_put(serial);
 			module_put(type->driver.owner);
 			return -ENODEV;
 		}
@@ -881,7 +863,7 @@ int usb_serial_probe(struct usb_interface *interface,
 		if (num_ports == 0) {
 			dev_err(&interface->dev,
 			    "Generic device with no bulk out, not allowed.\n");
-			kfree(serial);
+			usb_serial_put(serial);
 			module_put(type->driver.owner);
 			return -EIO;
 		}
@@ -1091,30 +1073,27 @@ int usb_serial_probe(struct usb_interface *interface,
 	} else {
 		serial->attached = 1;
 	}
-#ifdef CONFIG_MU509
-		if ((le16_to_cpu(dev->descriptor.idVendor) == 0x12D1 ) && (le16_to_cpu(dev->descriptor.idProduct) == 0x1001))
-			MU509_USB =1;
-		else
-			MU509_USB = 0;
+#ifdef CONFIG_BP_AUTO
+		int bp_id = get_current_bp_id();
+		if (((le16_to_cpu(dev->descriptor.idVendor) == 0x1782 ) && (le16_to_cpu(dev->descriptor.idProduct) == 0x0002) && (bp_id == 12))
+			|| ((le16_to_cpu(dev->descriptor.idVendor) == 0x19f5) && (le16_to_cpu(dev->descriptor.idProduct) == 0x9013) && (bp_id == 4))			
+			|| ((le16_to_cpu(dev->descriptor.idVendor) == 0x0E8D) && (le16_to_cpu(dev->descriptor.idProduct) == 0x00A2) && (bp_id == 1))
+			|| ((le16_to_cpu(dev->descriptor.idVendor) == 0x21f5) && (le16_to_cpu(dev->descriptor.idProduct) == 0x2012) && (bp_id == 10))
+		){
+			BP_USB =1;
+
+		}
+		else{
+			BP_USB = 0;
+		}
+		
 #endif
-#ifdef CONFIG_MW100		
-	if ((le16_to_cpu(dev->descriptor.idVendor) == 0x19f5) && (le16_to_cpu(dev->descriptor.idProduct) == 0x9013))			
-		MW100_USB =1;		
-	else			
-		MW100_USB = 0;
-#endif
-#ifdef CONFIG_MT6229		
-	if ((le16_to_cpu(dev->descriptor.idVendor) == 0x0E8D) && (le16_to_cpu(dev->descriptor.idProduct) == 0x00A2))			
-		MT6229_USB =1;		
-	else			
-		MT6229_USB = 0;
-#endif
-#ifdef CONFIG_SEW868		
-	if ((le16_to_cpu(dev->descriptor.idVendor) == 0x19d2) && (le16_to_cpu(dev->descriptor.idProduct) == 0xffeb))			
-		SEW868_USB =1;		
-	else			
-		SEW868_USB = 0;
-#endif
+
+	/* Avoid race with tty_open and serial_install by setting the
+	 * disconnected flag and not clearing it until all ports have been
+	 * registered.
+	 */
+	serial->disconnected = 1;
 
 	if (get_free_serial(serial, num_ports, &minor) == NULL) {
 		dev_err(&interface->dev, "No more free serial devices\n");
@@ -1139,6 +1118,8 @@ int usb_serial_probe(struct usb_interface *interface,
 			port->dev_state = PORT_REGISTERED;
 		}
 	}
+
+	serial->disconnected = 0;
 
 	usb_serial_console_init(debug, minor);
 

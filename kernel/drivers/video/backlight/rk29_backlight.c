@@ -65,10 +65,10 @@
 #endif
 
 #if defined(CONFIG_MALATA_D8005)
-#define KERNEL_BL_PWM_MIN 5
+#define KERNEL_BL_PWM_MIN 12
 #define KERNEL_BL_PWM_MAX 255
 #elif defined(CONFIG_MALATA_D7008)
-#define KERNEL_BL_PWM_MIN 5
+#define KERNEL_BL_PWM_MIN 9
 #define KERNEL_BL_PWM_MAX 190
 #elif defined(CONFIG_MALATA_D7007)
 #define KERNEL_BL_PWM_MIN 7
@@ -81,6 +81,9 @@
 #define KERNEL_BL_PWM_MAX 177
 #elif defined(CONFIG_MALATA_D9001)
 #define KERNEL_BL_PWM_MIN 8
+#define KERNEL_BL_PWM_MAX 255
+#elif defined(CONFIG_MALATA_C7019A)
+#define KERNEL_BL_PWM_MIN 9
 #define KERNEL_BL_PWM_MAX 255
 #else
 #define KERNEL_BL_PWM_MIN 13
@@ -96,6 +99,9 @@ static u32 sys_bright_save = KERNEL_BL_PWM_MIN;
 static int close_lcd = 0;
 static int brightness_save = 0;
 static int bl_init = 0;
+#ifdef CONFIG_HALL_KEY
+extern int lcd_mode = 0;
+#endif
 
 int convertint(char s[])  
 {  
@@ -211,6 +217,13 @@ static int rk29_bl_update_status(struct backlight_device *bl)
 	write_pwm_reg(id, PWM_REG_HRC, divh);
 #endif
 
+#ifdef CONFIG_HALL_KEY
+	if(!brightness)
+		lcd_mode = 0;
+	else
+		lcd_mode = 1;
+#endif
+
 	if(close_lcd == 0)
 		brightness_save = bl->props.brightness;
 	DBG("%s:line=%d,brightness = %d, div_total = %d, divh = %d state=%x \n",__FUNCTION__,__LINE__,brightness, div_total, divh,bl->props.state);
@@ -278,6 +291,10 @@ static void rk29_bl_suspend(struct early_suspend *h)
 		rk29_bl->props.brightness = 0;
 		rk29_bl_update_status(rk29_bl);
 		rk29_bl->props.brightness = brightness;
+#ifdef CONFIG_HALL_KEY
+		lcd_mode = 0;
+#endif
+
 	}
 
 }
@@ -418,7 +435,7 @@ static int rk29_backlight_probe(struct platform_device *pdev)
 	rk29_bl->props.brightness = BL_STEP / 2;
 	rk29_bl->props.state = BL_CORE_DRIVER1;		
 
-	schedule_delayed_work(&rk29_backlight_work, msecs_to_jiffies(0));
+	schedule_delayed_work(&rk29_backlight_work, msecs_to_jiffies(100));
 	ret = device_create_file(&pdev->dev,&dev_attr_rk29backlight);
 	if(ret)
 	{

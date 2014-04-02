@@ -33,18 +33,23 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/vmalloc.h>
-char debug_write_read = 0;
 #endif
+
+//#define USE_INT_CLK
+#define DIFFERENTIAL 1
+#define SINGLE_END 0
+#define TWO_SPK 2
+#define ONE_SPK 1
 
 static struct snd_soc_codec *rt3261_codec;
 
-#if 1
-#define DBG(x...)	printk(KERN_INFO x)
+#if 0
+#define DBG(x...)	printk(KERN_DEBUG x)
 #else
 #define DBG(x...)
 #endif
 
-//#define RTK_IOCTL
+#define RTK_IOCTL
 #ifdef RTK_IOCTL
 #if defined(CONFIG_SND_HWDEP) || defined(CONFIG_SND_HWDEP_MODULE)
 #include "rt_codec_ioctl.h"
@@ -53,14 +58,19 @@ static struct snd_soc_codec *rt3261_codec;
 #endif
 
 #include "rt3261.h"
-#if (CONFIG_SND_SOC_RT3261_MODULE | CONFIG_SND_SOC_RT3261)
+#if defined (CONFIG_SND_SOC_RT3261)
 #include "rt3261-dsp.h"
 #endif
 
 #define RT3261_REG_RW 1 /* for debug */
 #define RT3261_DET_EXT_MIC 0
 
-#define VERSION "0.3.0 alsa 1.0.24"
+#define VERSION "RT3261_V1.3.0"
+
+#if defined (CONFIG_SND_SOC_RT5623)
+extern void rt5623_on(void);
+extern void rt5623_off(void);
+#endif
 
 struct rt3261_init_reg {
 	u8 reg;
@@ -72,8 +82,11 @@ static struct rt3261_init_reg init_list[] = {
 	{RT3261_ADDA_CLK1	, 0x1114},//73[2] = 1'b
 	{RT3261_MICBIAS		, 0x3030},//93[5:4] = 11'b
 	{RT3261_CLS_D_OUT	, 0xa000},//8d[11] = 0'b
+	{RT3261_CLS_D_OVCD	, 0x0334},//8c[8] = 1'b
+	{RT3261_PRIV_INDEX	, 0x001d},//PR1d[8] = 1'b;
+	{RT3261_PRIV_DATA	, 0x0347},
 	{RT3261_PRIV_INDEX	, 0x003d},//PR3d[12] = 0'b; PR3d[9] = 1'b
-	{RT3261_PRIV_DATA	, 0x2600},
+	{RT3261_PRIV_DATA	, 0x3600},
 	{RT3261_PRIV_INDEX	, 0x0012},//PR12 = 0aa8'h
 	{RT3261_PRIV_DATA	, 0x0aa8},
 	{RT3261_PRIV_INDEX	, 0x0014},//PR14 = 8aaa'h
@@ -82,10 +95,48 @@ static struct rt3261_init_reg init_list[] = {
 	{RT3261_PRIV_DATA	, 0x6115},
 	{RT3261_PRIV_INDEX	, 0x0023},//PR23 = 0804'h
 	{RT3261_PRIV_DATA	, 0x0804},
-	{RT3261_SPK_VOL     , 0x8b8b},//SPKMIX -> SPKVOL
-	{RT3261_HP_VOL      , 0x8888},
-	{RT3261_OUTPUT      , 0x8888},//unmute OUTVOLL/R
-
+	{RT3261_SPK_VOL     	, 0x8888},//SPKMIX -> SPKVOL
+	{RT3261_HP_VOL      	, 0x8888},
+	{RT3261_OUTPUT      	, 0x8888},//unmute OUTVOLL/R
+	{RT3261_SPO_CLSD_RATIO 	, 0x0001},
+	{RT3261_I2S1_SDP	, 0xd000},
+	// huangcun 20130816 s
+#if 1
+	/*speaker*/
+	{RT3261_DSP_PATH2	, 0x0000},
+	{RT3261_PRIV_INDEX	, 0x003f},//PR3d[14] = 0'b; 
+	{RT3261_PRIV_DATA	, 0x0000},
+	{RT3261_DAC2_CTRL	, 0x0000},
+	{RT3261_MONO_DAC_MIXER, 0x4444},
+	{RT3261_SPK_L_MIXER,  0x003a},
+	{RT3261_SPK_R_MIXER,  0x003a},
+	{RT3261_SPO_L_MIXER,  0xc800},
+	/*headphone*/
+	{RT3261_OUT_L3_MIXER, 0x01fd},
+	{RT3261_OUT_R3_MIXER, 0x01fd},
+	{RT3261_HPO_MIXER,	  0xc000},
+#endif
+#if 1
+	/*capture*/
+	{RT3261_IN1_IN2,	  0x2080},//boost1 = 24db
+	{RT3261_REC_R2_MIXER, 0x007d},
+	{RT3261_MONO_ADC_MIXER,0x7030},
+	//{RT3261_GEN_CTRL1 , 0x2701},//regfa[13]=0
+	{RT3261_DSP_PATH2	, 0x0400},
+	{RT3261_DIG_INF_DATA, 0x0300},//right copy to left
+#endif
+#if 0
+	/*lin out*/
+	{RT3261_DSP_PATH2	, 0x0000},
+	{RT3261_PRIV_INDEX	, 0x003f},//PR3d[14] = 0'b; 
+	{RT3261_PRIV_DATA	, 0x0000},
+	{RT3261_DAC2_CTRL	, 0x0000},
+	{RT3261_MONO_DAC_MIXER, 0x4444},
+	{RT3261_OUT_L3_MIXER, 0x01fd},
+	{RT3261_OUT_R3_MIXER, 0x01fd},
+	{RT3261_LOUT_MIXER,   0xc000},
+#endif
+	// huangcun 20130816 e
 };
 #define RT3261_INIT_REG_LEN ARRAY_SIZE(init_list)
 
@@ -98,6 +149,40 @@ static int rt3261_reg_init(struct snd_soc_codec *codec)
 
 	return 0;
 }
+
+static int rt3261_customer_redefine(struct snd_soc_codec *codec, struct rt3261_priv *rt3261)
+{
+	if(rt3261->spk_num==TWO_SPK)
+	{
+		snd_soc_update_bits(codec, RT3261_SPO_L_MIXER,
+			RT3261_M_SV_R_SPM_L | RT3261_M_SV_L_SPM_L,
+			1 << RT3261_M_SV_R_SPM_L_SFT | 0 << RT3261_M_SV_L_SPM_L_SFT);
+		snd_soc_update_bits(codec, RT3261_SPO_R_MIXER,
+			RT3261_M_SV_R_SPM_R, 0 << RT3261_M_SV_R_SPM_R_SFT);
+	}
+	else
+	{
+		snd_soc_update_bits(codec, RT3261_SPO_L_MIXER,
+			RT3261_M_SV_R_SPM_L | RT3261_M_SV_L_SPM_L,
+			0 << RT3261_M_SV_R_SPM_L_SFT | 0 << RT3261_M_SV_L_SPM_L_SFT);
+		snd_soc_update_bits(codec, RT3261_SPO_R_MIXER,
+			RT3261_M_SV_R_SPM_R, 1 << RT3261_M_SV_R_SPM_R_SFT);
+	}
+
+	
+	snd_soc_update_bits(codec, RT3261_IN3_IN4,
+		RT3261_IN_DF2, rt3261->modem_input_mode << RT3261_IN_SFT2);
+	snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
+		RT3261_LOUT_DF_MASK, rt3261->lout_to_modem_mode << RT3261_LOUT_DF);
+	snd_soc_update_bits(codec, RT3261_SPO_CLSD_RATIO,
+		RT3261_SPO_CLSD_RATIO_MASK, rt3261->spk_amplify);
+	snd_soc_update_bits(codec, RT3261_DIG_INF_DATA,
+		RT3261_IF1_DAC_SEL_MASK	| RT3261_IF2_DAC_SEL_MASK, 
+		(rt3261->playback_if1_data_control<<RT3261_IF1_DAC_SEL_SFT) | (rt3261->playback_if2_data_control<<RT3261_IF2_DAC_SEL_SFT));
+
+	return 0;
+}
+
 
 static int rt3261_index_sync(struct snd_soc_codec *codec)
 {
@@ -208,7 +293,7 @@ static int do_hw_write(struct snd_soc_codec *codec, unsigned int reg,
 		return 0;
 	}
 
-	ret = codec->hw_write(codec->control_data, data, len);
+	ret = i2c_master_normal_send(codec->control_data, data, len,400*1000);
 	if (ret == len)
 		return 0;
 	if (ret < 0)
@@ -226,6 +311,7 @@ static int rt3261_write(struct snd_soc_codec *codec, unsigned int reg,
 	data[1] = (value >> 8) & 0xff;
 	data[2] = value & 0xff;
 
+	DBG("rt3261_write 0x%x = 0x%x\n",reg,value);
 	return do_hw_write(codec, reg, value, data, 3);
 }
 
@@ -475,8 +561,33 @@ static int rt3261_readable_register(
 	}
 }
 
+void codec_set_spk(bool on)
+{
+
+	struct snd_soc_codec *codec = rt3261_codec;
+	DBG("%s: %d\n", __func__, on);
+
+	if(!codec)
+		return;
+
+	mutex_lock(&codec->mutex);
+	if(on){
+		DBG("snd_soc_dapm_enable_pin\n");
+		snd_soc_dapm_enable_pin(&codec->dapm, "Headphone Jack");
+		snd_soc_dapm_enable_pin(&codec->dapm, "Ext Spk");
+	}else{
+		DBG("snd_soc_dapm_disable_pin\n");
+		snd_soc_dapm_disable_pin(&codec->dapm, "Headphone Jack");
+		snd_soc_dapm_disable_pin(&codec->dapm, "Ext Spk");
+	}
+	snd_soc_dapm_sync(&codec->dapm);
+	mutex_unlock(&codec->mutex);
+}
+
+
+
 /**
- * rt3261_headset_detect - Detect headset.
+ * rt3261_headset_mic_detect - Detect headset.
  * @codec: SoC audio codec device.
  * @jack_insert: Jack insert or not.
  *
@@ -484,43 +595,54 @@ static int rt3261_readable_register(
  *
  * Returns detect status.
  */
-int rt3261_headset_detect(struct snd_soc_codec *codec, int jack_insert)
+int rt3261_headset_mic_detect(int jack_insert)
 {
 	int jack_type;
+#ifdef USE_INT_CLK
 	int sclk_src;
+#endif
+
+	if(rt3261_codec == NULL){
+		return -1;
+	}
 
 	if(jack_insert) {
-		if (SND_SOC_BIAS_OFF == codec->dapm.bias_level) {
-			snd_soc_write(codec, RT3261_PWR_ANLG1, 0x2004);
-			snd_soc_write(codec, RT3261_MICBIAS, 0x3830);
-			snd_soc_write(codec, RT3261_GEN_CTRL1 , 0x3701);
+		if (SND_SOC_BIAS_OFF == rt3261_codec->dapm.bias_level) {
+			snd_soc_write(rt3261_codec, RT3261_PWR_ANLG1, 0x2004);
+			snd_soc_write(rt3261_codec, RT3261_MICBIAS, 0x3830);
+			snd_soc_write(rt3261_codec, RT3261_GEN_CTRL1 , 0x3701);
 		}
-		sclk_src = snd_soc_read(codec, RT3261_GLB_CLK) &
+#ifdef USE_INT_CLK
+		sclk_src = snd_soc_read(rt3261_codec, RT3261_GLB_CLK) &
 			RT3261_SCLK_SRC_MASK;
-		snd_soc_update_bits(codec, RT3261_GLB_CLK,
+		snd_soc_update_bits(rt3261_codec, RT3261_GLB_CLK,
 			RT3261_SCLK_SRC_MASK, 0x3 << RT3261_SCLK_SRC_SFT);
-		snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+#endif
+		snd_soc_update_bits(rt3261_codec, RT3261_PWR_ANLG1,
 			RT3261_PWR_LDO2, RT3261_PWR_LDO2);
-		snd_soc_update_bits(codec, RT3261_PWR_ANLG2,
+		snd_soc_update_bits(rt3261_codec, RT3261_PWR_ANLG2,
 			RT3261_PWR_MB1, RT3261_PWR_MB1);
-		snd_soc_update_bits(codec, RT3261_MICBIAS,
+		msleep(400);
+		snd_soc_update_bits(rt3261_codec, RT3261_MICBIAS,
 			RT3261_MIC1_OVCD_MASK | RT3261_MIC1_OVTH_MASK |
 			RT3261_PWR_CLK25M_MASK | RT3261_PWR_MB_MASK,
 			RT3261_MIC1_OVCD_EN | RT3261_MIC1_OVTH_600UA |
 			RT3261_PWR_MB_PU | RT3261_PWR_CLK25M_PU);
-		snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
+		snd_soc_update_bits(rt3261_codec, RT3261_GEN_CTRL1,
 			0x1, 0x1);
 		msleep(100);
-		if (snd_soc_read(codec, RT3261_IRQ_CTRL2) & 0x8)
+		if (snd_soc_read(rt3261_codec, RT3261_IRQ_CTRL2) & 0x8)
 			jack_type = RT3261_HEADPHO_DET;
 		else
 			jack_type = RT3261_HEADSET_DET;
-		snd_soc_update_bits(codec, RT3261_IRQ_CTRL2,
+		snd_soc_update_bits(rt3261_codec, RT3261_IRQ_CTRL2,
 			RT3261_MB1_OC_CLR, 0);
-		snd_soc_update_bits(codec, RT3261_GLB_CLK,
+#ifdef USE_INT_CLK
+		snd_soc_update_bits(rt3261_codec, RT3261_GLB_CLK,
 			RT3261_SCLK_SRC_MASK, sclk_src);
+#endif
 	} else {
-		snd_soc_update_bits(codec, RT3261_MICBIAS,
+		snd_soc_update_bits(rt3261_codec, RT3261_MICBIAS,
 			RT3261_MIC1_OVCD_MASK,
 			RT3261_MIC1_OVCD_DIS);
 		
@@ -529,73 +651,7 @@ int rt3261_headset_detect(struct snd_soc_codec *codec, int jack_insert)
 
 	return jack_type;
 }
-EXPORT_SYMBOL(rt3261_headset_detect);
-
-/**
- * rt3261_conn_mux_path - connect MUX widget path.
- * @codec: SoC audio codec device.
- * @widget_name: widget name.
- * @path_name: path name.
- *
- * Make MUX path connected and update register.
- *
- * Returns 0 for success or negative error code.
- */
-int rt3261_conn_mux_path(struct snd_soc_codec *codec,
-		char *widget_name, char *path_name)
-{
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
-	struct snd_soc_dapm_widget *w;
-	struct snd_soc_dapm_path *path;
-	struct snd_kcontrol_new *kcontrol;
-	struct soc_enum *em;
-	unsigned int val, mask, bitmask;
-	int i, update = 0;
-
-	if (codec == NULL || widget_name == NULL || path_name == NULL)
-		return -EINVAL;
-
-	list_for_each_entry(w, &dapm->card->widgets, list)
-	{
-		if (!w->name || w->dapm != dapm)
-			continue;
-		if (!(strcmp(w->name, widget_name))) {
-			if (w->id != snd_soc_dapm_mux)
-				return -EINVAL;
-			dev_info(codec->dev, "w->name=%s\n", w->name);
-			list_for_each_entry(path, &w->sources, list_sink)
-			{
-				if (!(strcmp(path->name, path_name)))
-					path->connect = 1;
-				else
-					path->connect = 0;
-				dev_info(codec->dev,
-					"path->name=%s path->connect=%d\n",
-					path->name, path->connect);
-			}
-			update = 1;
-			break;
-		}
-	}
-
-	if (update) {
-		snd_soc_dapm_sync(dapm);
-
-		kcontrol = &w->kcontrols[0];
-		em = (struct soc_enum *)kcontrol->private_value;
-		for (i = 0; i < em->max; i++)
-			if (!(strcmp(path_name, em->texts[i])))
-				break;
-		for (bitmask = 1; bitmask < em->max; bitmask <<= 1)
-			;
-		val = i << em->shift_l;
-		mask = (bitmask - 1) << em->shift_l;
-		snd_soc_update_bits(codec, em->reg, mask, val);
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL(rt3261_conn_mux_path);
+EXPORT_SYMBOL(rt3261_headset_mic_detect);
 
 static const char *rt3261_dacr2_src[] = { "TxDC_R", "TxDP_R" };
 
@@ -691,6 +747,378 @@ static int rt3261_dmic_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int rt3261_asrc_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct rt3261_priv *rt3261 = snd_soc_codec_get_drvdata(codec);
+
+	printk("%s\n", __FUNCTION__);
+	ucontrol->value.integer.value[0] = rt3261->asrc_en;
+
+	return 0;
+}
+
+static int rt3261_asrc_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct rt3261_priv *rt3261 = snd_soc_codec_get_drvdata(codec);
+
+	printk("%s\n", __FUNCTION__);
+	if (rt3261->asrc_en == ucontrol->value.integer.value[0])
+		return 0;
+
+	rt3261->asrc_en = ucontrol->value.integer.value[0];
+	switch (rt3261->asrc_en) {
+	case RT3261_ASRC_DIS://disable ASRC
+		printk("%s disable\n", __FUNCTION__);
+		snd_soc_write(codec, RT3261_ASRC_1, 0x0);			
+		snd_soc_write(codec, RT3261_ASRC_2, 0x0);
+		snd_soc_update_bits(codec, RT3261_GEN_CTRL1, 0x70, 0x0); //bard 8-29
+		mutex_lock(&codec->mutex);
+		snd_soc_dapm_disable_pin(&codec->dapm, "DAC L2 Power"); //bard 9-4
+		snd_soc_dapm_disable_pin(&codec->dapm, "stereo filter"); //bard 9-4
+		snd_soc_dapm_sync(&codec->dapm); //bard 9-4
+		mutex_unlock(&codec->mutex);
+		break;
+
+	case RT3261_ASRC_EN://enable ASRC
+		printk("%s enable\n", __FUNCTION__);
+		snd_soc_write(codec, RT3261_ASRC_1, 0x9800);			
+		snd_soc_write(codec, RT3261_ASRC_2, 0xF800);
+		snd_soc_update_bits(codec, RT3261_GEN_CTRL1, 0x70, 0x70); //bard 8-29
+		snd_soc_write(codec, RT3261_JD_CTRL, 0x03); //bard 8-29
+		//snd_soc_update_bits(codec, RT3261_PWR_DIG1, 0x0080, 0x0080);
+		//snd_soc_update_bits(codec, RT3261_PWR_DIG2, 0x8000, 0x8000);
+		mutex_lock(&codec->mutex);
+		snd_soc_dapm_force_enable_pin(&codec->dapm, "DAC L2 Power"); //bard 9-4
+		snd_soc_dapm_force_enable_pin(&codec->dapm, "stereo filter"); //bard 9-4
+		snd_soc_dapm_sync(&codec->dapm); //bard 9-4
+		mutex_unlock(&codec->mutex);
+		snd_soc_write(codec, RT3261_ADDA_CLK1, 0x1114);
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+//bard 8-9 s
+static int rt3261_mic1_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	ucontrol->value.integer.value[0] = 
+		(snd_soc_read(codec, RT3261_REC_L2_MIXER) & RT3261_M_BST1_RM_L) >> RT3261_M_BST1_RM_L_SFT;
+
+	return 0;
+}
+
+static int rt3261_mic1_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	if(ucontrol->value.integer.value[0]==0) {
+		snd_soc_update_bits(codec, RT3261_REC_L2_MIXER,
+			RT3261_M_BST1_RM_L, 0);
+		snd_soc_update_bits(codec, RT3261_REC_R2_MIXER,
+			RT3261_M_BST1_RM_R, 0);
+	}else {
+		snd_soc_update_bits(codec, RT3261_REC_L2_MIXER,
+			RT3261_M_BST1_RM_L, RT3261_M_BST1_RM_L);
+		snd_soc_update_bits(codec, RT3261_REC_R2_MIXER,
+			RT3261_M_BST1_RM_R, RT3261_M_BST1_RM_R);
+	}
+
+	return 0;
+}
+
+static int rt3261_mic2_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	ucontrol->value.integer.value[0] = 
+		(snd_soc_read(codec, RT3261_REC_L2_MIXER) & RT3261_M_BST1_RM_L) >> RT3261_M_BST1_RM_L_SFT;
+
+	return 0;
+}
+
+static int rt3261_mic2_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	if(ucontrol->value.integer.value[0]==0) {
+		snd_soc_update_bits(codec, RT3261_REC_L2_MIXER,
+			RT3261_M_BST4_RM_L, 0);
+		snd_soc_update_bits(codec, RT3261_REC_R2_MIXER,
+			RT3261_M_BST4_RM_R, 0);
+	}else {
+		snd_soc_update_bits(codec, RT3261_REC_L2_MIXER,
+			RT3261_M_BST4_RM_L, RT3261_M_BST4_RM_L);
+		snd_soc_update_bits(codec, RT3261_REC_R2_MIXER,
+			RT3261_M_BST4_RM_R, RT3261_M_BST4_RM_R);
+	}
+
+	return 0;
+}
+//bard 8-9 e
+
+void hp_amp_power(struct snd_soc_codec *codec, int on)
+{
+	static int hp_amp_power_count;
+	printk("hp_amp_power on=%d hp_amp_power_count=%d\n",on,hp_amp_power_count);
+//	dump_reg(codec);
+	if(on) {
+		if(hp_amp_power_count <= 0) {
+			snd_soc_update_bits(codec, RT3261_PWR_DIG1,
+				RT3261_PWR_I2S1, RT3261_PWR_I2S1);
+			/* depop parameters */
+			rt3261_index_update_bits(codec, RT3261_CHPUMP_INT_REG1,0x0700, 0x0200); //bard 12-6
+			snd_soc_update_bits(codec, RT3261_DEPOP_M2,
+				RT3261_DEPOP_MASK, RT3261_DEPOP_MAN);
+			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+				RT3261_HP_CP_MASK | RT3261_HP_SG_MASK | RT3261_HP_CB_MASK,
+				RT3261_HP_CP_PU | RT3261_HP_SG_DIS | RT3261_HP_CB_PU);
+			rt3261_index_write(codec, RT3261_HP_DCC_INT1, 0x9f00);
+			/* headphone amp power on */
+			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+				RT3261_PWR_FV1 | RT3261_PWR_FV2 , 0);
+			snd_soc_update_bits(codec, RT3261_PWR_VOL,
+				RT3261_PWR_HV_L | RT3261_PWR_HV_R,
+				RT3261_PWR_HV_L | RT3261_PWR_HV_R);
+			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+				RT3261_PWR_HP_L | RT3261_PWR_HP_R | RT3261_PWR_HA , //bard 10-18
+				RT3261_PWR_HP_L | RT3261_PWR_HP_R | RT3261_PWR_HA); //bard 10-18
+			msleep(50);
+			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+				RT3261_PWR_FV1 | RT3261_PWR_FV2,
+				RT3261_PWR_FV1 | RT3261_PWR_FV2);
+				
+			snd_soc_update_bits(codec, RT3261_CHARGE_PUMP,
+				RT3261_PM_HP_MASK, RT3261_PM_HP_HV);
+			rt3261_index_update_bits(codec, RT3261_CHOP_DAC_ADC, 0x0200, 0x0200);
+			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+				RT3261_HP_CO_MASK | RT3261_HP_SG_MASK,
+				RT3261_HP_CO_EN | RT3261_HP_SG_EN);
+			rt3261_index_update_bits(codec, RT3261_CHPUMP_INT_REG1,0x0700, 0x0400); //bard 12-6
+		}
+		hp_amp_power_count++;
+	} else {
+		hp_amp_power_count--;
+		if(hp_amp_power_count <= 0) {
+			//rt3261_index_update_bits(codec, RT3261_CHOP_DAC_ADC, 0x0200, 0x0);
+			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+				RT3261_HP_SG_MASK | RT3261_HP_L_SMT_MASK |
+				RT3261_HP_R_SMT_MASK, RT3261_HP_SG_DIS |
+				RT3261_HP_L_SMT_DIS | RT3261_HP_R_SMT_DIS);
+			/* headphone amp power down */
+			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+				RT3261_SMT_TRIG_MASK | RT3261_HP_CD_PD_MASK |
+				RT3261_HP_CO_MASK | RT3261_HP_CP_MASK |
+				RT3261_HP_SG_MASK | RT3261_HP_CB_MASK,
+				RT3261_SMT_TRIG_DIS | RT3261_HP_CD_PD_EN |
+				RT3261_HP_CO_DIS | RT3261_HP_CP_PD |
+				RT3261_HP_SG_EN | RT3261_HP_CB_PD);
+			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+				RT3261_PWR_HP_L | RT3261_PWR_HP_R | RT3261_PWR_HA , //bard 10-18
+				0);
+		}
+	}
+}
+
+static int rt3261_hp_mute_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	 
+	ucontrol->value.integer.value[0] = 
+		!((snd_soc_read(codec, RT3261_HP_VOL) & RT3261_L_MUTE) >> RT3261_L_MUTE_SFT);
+
+	return 0;
+}
+
+static int rt3261_hp_mute_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	if(ucontrol->value.integer.value[0]) {
+		/* headphone unmute sequence */
+		snd_soc_update_bits(codec, RT3261_DEPOP_M3,
+			RT3261_CP_FQ1_MASK | RT3261_CP_FQ2_MASK | RT3261_CP_FQ3_MASK,
+			(RT3261_CP_FQ_192_KHZ << RT3261_CP_FQ1_SFT) |
+			(RT3261_CP_FQ_12_KHZ << RT3261_CP_FQ2_SFT) |
+			(RT3261_CP_FQ_192_KHZ << RT3261_CP_FQ3_SFT));
+		rt3261_index_write(codec, RT3261_MAMP_INT_REG2, 0xfc00);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_SMT_TRIG_MASK, RT3261_SMT_TRIG_EN);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_RSTN_MASK, RT3261_RSTN_EN);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_RSTN_MASK | RT3261_HP_L_SMT_MASK | RT3261_HP_R_SMT_MASK,
+			RT3261_RSTN_DIS | RT3261_HP_L_SMT_EN | RT3261_HP_R_SMT_EN);
+		snd_soc_update_bits(codec, RT3261_HP_VOL,
+			RT3261_L_MUTE | RT3261_R_MUTE, 0);
+		msleep(100);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_HP_SG_MASK | RT3261_HP_L_SMT_MASK |
+			RT3261_HP_R_SMT_MASK, RT3261_HP_SG_DIS |
+			RT3261_HP_L_SMT_DIS | RT3261_HP_R_SMT_DIS);
+		/*bard 10-18 r
+		msleep(20);	
+		snd_soc_update_bits(codec, RT3261_HP_CALIB_AMP_DET,
+			RT3261_HPD_PS_MASK, RT3261_HPD_PS_EN);
+		*/
+	}else {
+		/* headphone mute sequence */
+		snd_soc_update_bits(codec, RT3261_DEPOP_M3,
+			RT3261_CP_FQ1_MASK | RT3261_CP_FQ2_MASK | RT3261_CP_FQ3_MASK,
+			(RT3261_CP_FQ_96_KHZ << RT3261_CP_FQ1_SFT) |
+			(RT3261_CP_FQ_12_KHZ << RT3261_CP_FQ2_SFT) |
+			(RT3261_CP_FQ_96_KHZ << RT3261_CP_FQ3_SFT));
+		rt3261_index_write(codec, RT3261_MAMP_INT_REG2, 0xfc00);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_HP_SG_MASK, RT3261_HP_SG_EN);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_RSTP_MASK, RT3261_RSTP_EN);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_RSTP_MASK | RT3261_HP_L_SMT_MASK |
+			RT3261_HP_R_SMT_MASK, RT3261_RSTP_DIS |
+			RT3261_HP_L_SMT_EN | RT3261_HP_R_SMT_EN);
+		/*bard 10-18 r
+		snd_soc_update_bits(codec, RT3261_HP_CALIB_AMP_DET,
+			RT3261_HPD_PS_MASK, RT3261_HPD_PS_DIS);
+		msleep(90);
+		*/
+		snd_soc_update_bits(codec, RT3261_HP_VOL,
+			RT3261_L_MUTE | RT3261_R_MUTE, RT3261_L_MUTE | RT3261_R_MUTE);
+		msleep(30);
+		snd_soc_update_bits(codec, RT3261_DEPOP_M1,
+			RT3261_HP_R_SMT_MASK | RT3261_HP_L_SMT_MASK,
+			RT3261_HP_L_SMT_DIS | RT3261_HP_R_SMT_DIS);
+		} 
+	return 0;
+}
+
+#if defined (CONFIG_SND_SOC_RT5623)
+static int rt3261_modem_input_switch_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct rt3261_priv *rt3261 = snd_soc_codec_get_drvdata(codec);
+
+	ucontrol->value.integer.value[0] = rt3261->modem_is_open;
+	return 0;
+}
+
+static int rt3261_modem_input_switch_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct rt3261_priv *rt3261 = snd_soc_codec_get_drvdata(codec);
+
+	if(ucontrol->value.integer.value[0]) {
+		rt5623_on( );
+		rt3261->modem_is_open = 1;	
+	}else {
+		rt5623_off( );
+		rt3261->modem_is_open = 0;
+	} 
+
+	return 0;
+}
+#else
+static int rt3261_modem_input_switch_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+
+static int rt3261_modem_input_switch_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+#endif
+
+static int rt3261_dacr_sel_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	ucontrol->value.integer.value[0] = (rt3261_index_read(codec, RT3261_MIXER_INT_REG) & 0x4000) >> 14;
+
+	return 0;
+}
+
+static int rt3261_dacr_sel_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	if(ucontrol->value.integer.value[0])
+		rt3261_index_update_bits(codec, RT3261_MIXER_INT_REG, 0x4000, 0x4000);
+	else
+		rt3261_index_update_bits(codec, RT3261_MIXER_INT_REG, 0x4000, 0x0);
+	
+
+	return 0;
+}
+
+static int rt3261_rxdp_sel_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	ucontrol->value.integer.value[0] = (rt3261_index_read(codec, RT3261_MIXER_INT_REG) & 0x0400) >> 10;
+
+	return 0;
+}
+
+static int rt3261_rxdp_sel_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	if(ucontrol->value.integer.value[0])
+		rt3261_index_update_bits(codec, RT3261_MIXER_INT_REG, 0x0400, 0x0400);
+	else
+		rt3261_index_update_bits(codec, RT3261_MIXER_INT_REG, 0x0400, 0x0);
+	
+
+	return 0;
+}
+
+static int rt3261_rxdp1_sel_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	ucontrol->value.integer.value[0] = (rt3261_index_read(codec, RT3261_MIXER_INT_REG) & 0x0200) >> 9;
+
+	return 0;
+}
+
+static int rt3261_rxdp1_sel_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+
+	if(ucontrol->value.integer.value[0])
+		rt3261_index_update_bits(codec, RT3261_MIXER_INT_REG, 0x0200, 0x0200);
+	else
+		rt3261_index_update_bits(codec, RT3261_MIXER_INT_REG, 0x0200, 0x0);
+	
+
+	return 0;
+}
 
 /* IN1/IN2 Input Type */
 static const char *rt3261_input_mode[] = {
@@ -704,9 +1132,22 @@ static const SOC_ENUM_SINGLE_DECL(
 	rt3261_in2_mode_enum, RT3261_IN3_IN4,
 	RT3261_IN_SFT2, rt3261_input_mode);
 
+static const SOC_ENUM_SINGLE_DECL(
+	rt3261_in3_mode_enum, RT3261_IN1_IN2,
+	RT3261_IN_SFT2, rt3261_input_mode);
+
+//output type
+static const char *rt3261_output_mode[] = {
+	"Single ended", "Differential"};
+
+static const SOC_ENUM_SINGLE_DECL(
+	rt3261_lout_mode_enum, RT3261_GEN_CTRL1,
+	RT3261_LOUT_DF, rt3261_output_mode);
+
+
 /* Interface data select */
 static const char *rt3261_data_select[] = {
-	"Normal", "left copy to right", "right copy to left", "Swap"};
+	"Normal", "Swap", "left copy to right", "right copy to left"};
 
 static const SOC_ENUM_SINGLE_DECL(rt3261_if1_dac_enum, RT3261_DIG_INF_DATA,
 				RT3261_IF1_DAC_SEL_SFT, rt3261_data_select);
@@ -738,8 +1179,37 @@ static const SOC_ENUM_SINGLE_DECL(
 static const char *rt3261_dmic_mode[] = {"Disable", "DMIC1", "DMIC2"};
 
 static const SOC_ENUM_SINGLE_DECL(rt3261_dmic_enum, 0, 0, rt3261_dmic_mode);
+/* ASRC */
+static const char *rt3261_asrc_mode[] = {"Disable", "Enable"};
+
+static const SOC_ENUM_SINGLE_DECL(rt3261_asrc_enum, 0, 0, rt3261_asrc_mode);
+
+/* PR-3F */
+static const char *rt3261_dacr_sel_mode[] = {"IF2_DAC", "IF2_ADC"};
+
+static const SOC_ENUM_SINGLE_DECL(rt3261_dacr_sel_enum, 0, 0, rt3261_dacr_sel_mode);
+
+static const char *rt3261_rxdp_sel_mode[] = {"RxDP2", "RxDP1"};
+
+static const SOC_ENUM_SINGLE_DECL(rt3261_rxdp_sel_enum, 0, 0, rt3261_rxdp_sel_mode);
+
+static const char *rt3261_rxdp1_sel_mode[] = {"DAC1", "IF1_DAC"};
+
+static const SOC_ENUM_SINGLE_DECL(rt3261_rxdp1_sel_enum, 0, 0, rt3261_rxdp1_sel_mode);
 
 
+//bard 8-9 s
+static const char *rt3261_mic_mode[] = {"off", "on",};
+static const SOC_ENUM_SINGLE_DECL(rt3261_mic_enum, 0, 0, rt3261_mic_mode);
+//bard 8-9 e
+
+static const char *rt3261_hp_mute_mode[] = {"off", "on",};
+
+static const SOC_ENUM_SINGLE_DECL(rt3261_hp_mute_enum, 0, 0, rt3261_hp_mute_mode);
+
+static const char *rt3261_modem_input_switch_mode[] = {"off", "on",};
+
+static const SOC_ENUM_SINGLE_DECL(rt3261_modem_input_switch_enum, 0, 0, rt3261_modem_input_switch_mode);
 
 #ifdef RT3261_REG_RW
 #define REGVAL_MAX 0xffff
@@ -813,10 +1283,13 @@ static const struct snd_kcontrol_new rt3261_snd_controls[] = {
 	SOC_DOUBLE_EXT_TLV("Speaker Playback Volume", RT3261_SPK_VOL,
 		RT3261_L_VOL_SFT, RT3261_R_VOL_SFT, RT3261_VOL_RSCL_RANGE, 0,
 		rt3261_vol_rescale_get, rt3261_vol_rescale_put, out_vol_tlv),
+	SOC_DOUBLE_EXT_TLV("Earpiece Playback Volume", RT3261_SPK_VOL,
+		RT3261_L_VOL_SFT, RT3261_R_VOL_SFT, RT3261_VOL_RSCL_RANGE, 0,
+		rt3261_vol_rescale_get, rt3261_vol_rescale_put, out_vol_tlv),
 	/* Headphone Output Volume */
 	SOC_DOUBLE("HP Playback Switch", RT3261_HP_VOL,
 		RT3261_L_MUTE_SFT, RT3261_R_MUTE_SFT, 1, 1),
-	SOC_DOUBLE_EXT_TLV("HP Playback Volume", RT3261_HP_VOL,
+	SOC_DOUBLE_EXT_TLV("Headphone Playback Volume", RT3261_HP_VOL,
 		RT3261_L_VOL_SFT, RT3261_R_VOL_SFT, RT3261_VOL_RSCL_RANGE, 0,
 		rt3261_vol_rescale_get, rt3261_vol_rescale_put, out_vol_tlv),
 	/* OUTPUT Control */
@@ -845,6 +1318,11 @@ static const struct snd_kcontrol_new rt3261_snd_controls[] = {
 	SOC_ENUM("IN2 Mode Control", rt3261_in2_mode_enum),
 	SOC_SINGLE_TLV("IN2 Boost", RT3261_IN3_IN4,
 		RT3261_BST_SFT2, 8, 0, bst_tlv),
+	SOC_ENUM("IN3 Mode Control",  rt3261_in3_mode_enum),
+	SOC_SINGLE_TLV("IN3 Boost", RT3261_IN1_IN2,
+		RT3261_BST_SFT2, 8, 0, bst_tlv),
+
+	SOC_ENUM("LOUT Mode Control",  rt3261_lout_mode_enum),
 	/* INL/INR Volume Control */
 	SOC_DOUBLE_TLV("IN Capture Volume", RT3261_INL_INR_VOL,
 			RT3261_INL_VOL_SFT, RT3261_INR_VOL_SFT,
@@ -867,7 +1345,16 @@ static const struct snd_kcontrol_new rt3261_snd_controls[] = {
 	/* DMIC */
 	SOC_ENUM_EXT("DMIC Switch", rt3261_dmic_enum,
 		rt3261_dmic_get, rt3261_dmic_put),
-
+	/* ASRC */
+	SOC_ENUM_EXT("ASRC Switch", rt3261_asrc_enum,
+		rt3261_asrc_get, rt3261_asrc_put),
+	/* PR-3F */
+	SOC_ENUM_EXT("DACR Select", rt3261_dacr_sel_enum,
+		rt3261_dacr_sel_get, rt3261_dacr_sel_put),
+	SOC_ENUM_EXT("RxDP Select", rt3261_rxdp_sel_enum,
+		rt3261_rxdp_sel_get, rt3261_rxdp_sel_put),
+	SOC_ENUM_EXT("RxDP1 Select", rt3261_rxdp1_sel_enum,
+		rt3261_rxdp1_sel_get, rt3261_rxdp1_sel_put),
 #ifdef RT3261_REG_RW
 	{
 		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
@@ -877,6 +1364,27 @@ static const struct snd_kcontrol_new rt3261_snd_controls[] = {
 		.put = rt3261_regctl_put,
 	},
 #endif
+//bard 8-9 s
+	SOC_SINGLE_TLV("Main Mic Capture Volume", RT3261_IN1_IN2,
+		RT3261_BST_SFT1,  8, 0, bst_tlv), 
+	SOC_SINGLE_TLV("Headset Mic Capture Volume", RT3261_IN3_IN4,
+		RT3261_BST_SFT2, 8, 0, bst_tlv),
+	SOC_ENUM_EXT("Main Mic Capture Switch", rt3261_mic_enum,
+		rt3261_mic1_get, rt3261_mic1_put),
+	SOC_ENUM_EXT("Headset Mic Capture Switch", rt3261_mic_enum,
+		rt3261_mic2_get, rt3261_mic2_put),
+//bard 8-9 e
+
+	SOC_ENUM_EXT("HP mute Switch", rt3261_hp_mute_enum,
+		rt3261_hp_mute_get, rt3261_hp_mute_put),
+
+	SOC_ENUM_EXT("Modem Input Switch", rt3261_modem_input_switch_enum,
+		rt3261_modem_input_switch_get, rt3261_modem_input_switch_put),
+
+	SOC_ENUM("ADC IF1 Data Switch", rt3261_if1_adc_enum), 
+	SOC_ENUM("DAC IF1 Data Switch", rt3261_if1_dac_enum), 
+	SOC_ENUM("ADC IF2 Data Switch", rt3261_if2_adc_enum), 
+	SOC_ENUM("DAC IF2 Data Switch", rt3261_if2_dac_enum), 
 };
 
 /**
@@ -1121,10 +1629,15 @@ static const struct snd_kcontrol_new rt3261_out_r_mix[] = {
 };
 
 static const struct snd_kcontrol_new rt3261_spo_l_mix[] = {
+#if 0 //org
 	SOC_DAPM_SINGLE("DAC R1 Switch", RT3261_SPO_L_MIXER,
 			RT3261_M_DAC_R1_SPM_L_SFT, 1, 1),
 	SOC_DAPM_SINGLE("DAC L1 Switch", RT3261_SPO_L_MIXER,
 			RT3261_M_DAC_L1_SPM_L_SFT, 1, 1),
+#else //bard 8-27
+	SOC_DAPM_SINGLE("DAC Switch", RT3261_DUMMY_SPKMIXER,
+			RT3261_M_DAC_R1_SPM_L_SFT, 1, 1),
+#endif
 	SOC_DAPM_SINGLE("SPKVOL R Switch", RT3261_SPO_L_MIXER,
 			RT3261_M_SV_R_SPM_L_SFT, 1, 1),
 	SOC_DAPM_SINGLE("SPKVOL L Switch", RT3261_SPO_L_MIXER,
@@ -1132,7 +1645,15 @@ static const struct snd_kcontrol_new rt3261_spo_l_mix[] = {
 	SOC_DAPM_SINGLE("BST1 Switch", RT3261_SPO_L_MIXER,
 			RT3261_M_BST1_SPM_L_SFT, 1, 1),
 };
+//bard 8-27 s
+static const struct snd_kcontrol_new rt3261_spo_dac_mix[] = {
+	SOC_DAPM_SINGLE("DAC R1 Switch", RT3261_SPO_L_MIXER,
+			RT3261_M_DAC_R1_SPM_L_SFT, 1, 1),
+	SOC_DAPM_SINGLE("DAC L1 Switch", RT3261_SPO_L_MIXER,
+			RT3261_M_DAC_L1_SPM_L_SFT, 1, 1),
 
+};
+//bard 8-27 e
 static const struct snd_kcontrol_new rt3261_spo_r_mix[] = {
 	SOC_DAPM_SINGLE("DAC R1 Switch", RT3261_SPO_R_MIXER,
 			RT3261_M_DAC_R1_SPM_R_SFT, 1, 1),
@@ -1323,22 +1844,26 @@ static int rt3261_adc_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
-		rt3261_index_update_bits(codec,
-			RT3261_CHOP_DAC_ADC, 0x1000, 0x1000);
+		//rt3261_index_update_bits(codec,
+		//	RT3261_CHOP_DAC_ADC, 0x1000, 0x1000);
+		/*bard 3-26 r
 		val = snd_soc_read(codec, RT3261_MONO_ADC_MIXER);
 		mask = RT3261_M_MONO_ADC_L1 | RT3261_M_MONO_ADC_L2 |
 			RT3261_M_MONO_ADC_R1 | RT3261_M_MONO_ADC_R2;
 		if ((val & mask) ^ mask)
 			snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
 				RT3261_M_MAMIX_L | RT3261_M_MAMIX_R, 0);
+		*/
 		break;
 
 	case SND_SOC_DAPM_POST_PMD:
+		/*bard 3-26 r
 		snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
 			RT3261_M_MAMIX_L | RT3261_M_MAMIX_R,
 			RT3261_M_MAMIX_L | RT3261_M_MAMIX_R);
-		rt3261_index_update_bits(codec,
-			RT3261_CHOP_DAC_ADC, 0x1000, 0x0000);
+		*/
+		//rt3261_index_update_bits(codec,
+		//	RT3261_CHOP_DAC_ADC, 0x1000, 0x0000);
 		break;
 
 	default:
@@ -1348,13 +1873,71 @@ static int rt3261_adc_event(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+//bard 3-26 s
+static int rt3261_mono_adcl_event(struct snd_soc_dapm_widget *w,
+	struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_codec *codec = w->codec;
+	unsigned int val, mask;
+
+	switch (event) {
+	case SND_SOC_DAPM_POST_PMU:
+		snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
+			RT3261_M_MAMIX_L, 0);
+		break;
+	case SND_SOC_DAPM_PRE_PMD:
+		snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
+			RT3261_M_MAMIX_L,
+			RT3261_M_MAMIX_L);
+		break;
+
+	default:
+		return 0;
+	}
+
+	return 0;
+}
+
+static int rt3261_mono_adcr_event(struct snd_soc_dapm_widget *w,
+	struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_codec *codec = w->codec;
+	unsigned int val, mask;
+
+	switch (event) {
+	case SND_SOC_DAPM_POST_PMU:
+		snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
+			RT3261_M_MAMIX_R, 0);
+		break;
+	case SND_SOC_DAPM_PRE_PMD:
+		snd_soc_update_bits(codec, RT3261_GEN_CTRL1,
+			RT3261_M_MAMIX_R,
+			RT3261_M_MAMIX_R);
+		break;
+
+	default:
+		return 0;
+	}
+
+	return 0;
+}
+//bard 3-26 e
 static int rt3261_spk_event(struct snd_soc_dapm_widget *w,
 		struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_codec *codec = w->codec;
+	unsigned int val;
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
+//bard 8-26 s
+		val = snd_soc_read(codec, RT3261_PWR_DIG1);
+		if(val & (RT3261_PWR_DAC_L1 | RT3261_PWR_DAC_R1)) {
+			snd_soc_update_bits(codec, RT3261_PWR_DIG1,
+				RT3261_PWR_DAC_L1 | RT3261_PWR_DAC_R1,
+				RT3261_PWR_DAC_L1 | RT3261_PWR_DAC_R1);
+		}
+//bard 8-26 e
 		snd_soc_update_bits(codec, RT3261_PWR_DIG1,
 			RT3261_PWR_CLS_D, RT3261_PWR_CLS_D);
 		rt3261_index_update_bits(codec,
@@ -1380,70 +1963,12 @@ static int rt3261_spk_event(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
-void hp_amp_power(struct snd_soc_codec *codec, int on)
-{
-	static int hp_amp_power_count;
-	printk("hp_amp_power on=%d hp_amp_power_count=%d\n",on,hp_amp_power_count);
-//	dump_reg(codec);
-	if(on) {
-		if(hp_amp_power_count <= 0) {
-			/* depop parameters */
-			snd_soc_update_bits(codec, RT3261_DEPOP_M2,
-				RT3261_DEPOP_MASK, RT3261_DEPOP_MAN);
-			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
-				RT3261_HP_CP_MASK | RT3261_HP_SG_MASK | RT3261_HP_CB_MASK,
-				RT3261_HP_CP_PU | RT3261_HP_SG_DIS | RT3261_HP_CB_PU);
-			rt3261_index_write(codec, RT3261_HP_DCC_INT1, 0x9f00);
-			/* headphone amp power on */
-			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
-				RT3261_PWR_FV1 | RT3261_PWR_FV2 , 0);
-			snd_soc_update_bits(codec, RT3261_PWR_VOL,
-				RT3261_PWR_HV_L | RT3261_PWR_HV_R,
-				RT3261_PWR_HV_L | RT3261_PWR_HV_R);
-			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
-				RT3261_PWR_HP_L | RT3261_PWR_HP_R | RT3261_PWR_HA | RT3261_PWR_LM,
-				RT3261_PWR_HP_L | RT3261_PWR_HP_R | RT3261_PWR_HA | RT3261_PWR_LM);
-			msleep(50);
-			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
-				RT3261_PWR_FV1 | RT3261_PWR_FV2,
-				RT3261_PWR_FV1 | RT3261_PWR_FV2);
-				
-			snd_soc_update_bits(codec, RT3261_CHARGE_PUMP,
-				RT3261_PM_HP_MASK, RT3261_PM_HP_HV);
-			rt3261_index_update_bits(codec, RT3261_CHOP_DAC_ADC, 0x0200, 0x0200);
-			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
-				RT3261_HP_CO_MASK | RT3261_HP_SG_MASK,
-				RT3261_HP_CO_EN | RT3261_HP_SG_EN);
-		}
-		hp_amp_power_count++;
-	} else {
-		hp_amp_power_count--;
-		if(hp_amp_power_count <= 0) {
-			//rt3261_index_update_bits(codec, RT3261_CHOP_DAC_ADC, 0x0200, 0x0);
-			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
-				RT3261_HP_SG_MASK | RT3261_HP_L_SMT_MASK |
-				RT3261_HP_R_SMT_MASK, RT3261_HP_SG_DIS |
-				RT3261_HP_L_SMT_DIS | RT3261_HP_R_SMT_DIS);
-			/* headphone amp power down */
-			snd_soc_update_bits(codec, RT3261_DEPOP_M1,
-				RT3261_SMT_TRIG_MASK | RT3261_HP_CD_PD_MASK |
-				RT3261_HP_CO_MASK | RT3261_HP_CP_MASK |
-				RT3261_HP_SG_MASK | RT3261_HP_CB_MASK,
-				RT3261_SMT_TRIG_DIS | RT3261_HP_CD_PD_EN |
-				RT3261_HP_CO_DIS | RT3261_HP_CP_PD |
-				RT3261_HP_SG_EN | RT3261_HP_CB_PD);
-			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
-				RT3261_PWR_HP_L | RT3261_PWR_HP_R | RT3261_PWR_HA | RT3261_PWR_LM,
-				0);
-		}
-	}
-}
-
 #if 1 //seq
 static void rt3261_pmu_depop(struct snd_soc_codec *codec)
 {
 #if 0
 	/* depop parameters */
+	rt3261_index_update_bits(codec, RT3261_CHPUMP_INT_REG1,0x0700, 0x0200); //bard 12-6
 	snd_soc_update_bits(codec, RT3261_DEPOP_M2,
 		RT3261_DEPOP_MASK, RT3261_DEPOP_MAN);
 	snd_soc_update_bits(codec, RT3261_DEPOP_M1,
@@ -1471,6 +1996,7 @@ static void rt3261_pmu_depop(struct snd_soc_codec *codec)
 	snd_soc_update_bits(codec, RT3261_DEPOP_M1,
 		RT3261_HP_CO_MASK | RT3261_HP_SG_MASK,
 		RT3261_HP_CO_EN | RT3261_HP_SG_EN);
+	rt3261_index_update_bits(codec, RT3261_CHPUMP_INT_REG1,0x0700, 0x0400); //bard 12-6
 #else
 	hp_amp_power(codec, 1);
 #endif
@@ -1495,9 +2021,11 @@ static void rt3261_pmu_depop(struct snd_soc_codec *codec)
 		RT3261_HP_SG_MASK | RT3261_HP_L_SMT_MASK |
 		RT3261_HP_R_SMT_MASK, RT3261_HP_SG_DIS |
 		RT3261_HP_L_SMT_DIS | RT3261_HP_R_SMT_DIS);
+	/*bard 10-18 r
 	msleep(20);	
 	snd_soc_update_bits(codec, RT3261_HP_CALIB_AMP_DET,
 		RT3261_HPD_PS_MASK, RT3261_HPD_PS_EN);
+	*/
 }
 
 static void rt3261_pmd_depop(struct snd_soc_codec *codec)
@@ -1517,9 +2045,11 @@ static void rt3261_pmd_depop(struct snd_soc_codec *codec)
 		RT3261_RSTP_MASK | RT3261_HP_L_SMT_MASK |
 		RT3261_HP_R_SMT_MASK, RT3261_RSTP_DIS |
 		RT3261_HP_L_SMT_EN | RT3261_HP_R_SMT_EN);
+	/*bard 10-18 r
 	snd_soc_update_bits(codec, RT3261_HP_CALIB_AMP_DET,
 		RT3261_HPD_PS_MASK, RT3261_HPD_PS_DIS);
 	msleep(90);
+	*/
 	snd_soc_update_bits(codec, RT3261_HP_VOL,
 		RT3261_L_MUTE | RT3261_R_MUTE, RT3261_L_MUTE | RT3261_R_MUTE);
 	msleep(30);
@@ -1548,6 +2078,7 @@ static void rt3261_pmd_depop(struct snd_soc_codec *codec)
 static void rt3261_pmu_depop(struct snd_soc_codec *codec)
 {
 	/* depop parameters */
+	rt3261_index_update_bits(codec, RT3261_CHPUMP_INT_REG1,0x0700, 0x0200); //bard 12-6
 	snd_soc_update_bits(codec, RT3261_DEPOP_M2,
 		RT3261_DEPOP_MASK, RT3261_DEPOP_MAN);
 	snd_soc_update_bits(codec, RT3261_DEPOP_M1,
@@ -1582,18 +2113,23 @@ static void rt3261_pmu_depop(struct snd_soc_codec *codec)
 	snd_soc_update_bits(codec, RT3261_DEPOP_M1,
 		RT3261_HP_CP_MASK | RT3261_HP_SG_MASK,
 		RT3261_HP_CP_PD | RT3261_HP_SG_EN);
+	rt3261_index_update_bits(codec, RT3261_CHPUMP_INT_REG1,0x0700, 0x0400); //bard 12-6
 	msleep(10);
 	snd_soc_update_bits(codec, RT3261_HP_VOL,
 		RT3261_L_MUTE | RT3261_R_MUTE, 0);
-	msleep(180);
+	msleep(70); //bard 10-18
+	/*bard 10-18 r
 	snd_soc_update_bits(codec, RT3261_HP_CALIB_AMP_DET,
 		RT3261_HPD_PS_MASK, RT3261_HPD_PS_EN);
+	*/
 }
 
 static void rt3261_pmd_depop(struct snd_soc_codec *codec)
 {
+	/*bard 10-18 r
 	snd_soc_update_bits(codec, RT3261_HP_CALIB_AMP_DET,
 		RT3261_HPD_PS_MASK, RT3261_HPD_PS_DIS);
+	*/
 	snd_soc_update_bits(codec, RT3261_HP_VOL,
 		RT3261_L_MUTE | RT3261_R_MUTE,
 		RT3261_L_MUTE | RT3261_R_MUTE);
@@ -1660,6 +2196,8 @@ static int rt3261_lout_event(struct snd_soc_dapm_widget *w,
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
 		hp_amp_power(codec,1);
+		snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+			RT3261_PWR_LM, RT3261_PWR_LM); //bard 10-18
 		snd_soc_update_bits(codec, RT3261_OUTPUT,
 			RT3261_L_MUTE | RT3261_R_MUTE, 0);
 		break;
@@ -1668,6 +2206,8 @@ static int rt3261_lout_event(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, RT3261_OUTPUT,
 			RT3261_L_MUTE | RT3261_R_MUTE,
 			RT3261_L_MUTE | RT3261_R_MUTE);
+		snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+			RT3261_PWR_LM, 0); //bard 10-18
 		hp_amp_power(codec,0);
 		break;
 
@@ -1677,26 +2217,30 @@ static int rt3261_lout_event(struct snd_soc_dapm_widget *w,
 
 	return 0;
 }
-
-static int rt3261_index_sync_event(struct snd_soc_dapm_widget *w, 
+//bard 8-29 s
+static int rt3261_dac_event(struct snd_soc_dapm_widget *w, 
 	struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_codec *codec = w->codec;
-	printk("enter %s\n",__func__);
+	struct rt3261_priv *rt3261 = snd_soc_codec_get_drvdata(codec);
+
 	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-	case SND_SOC_DAPM_POST_PMD:
-		printk("snd_soc_read(codec,RT3261_DUMMY_PR3F)=0x%x\n",snd_soc_read(codec,RT3261_DUMMY_PR3F));
-		rt3261_index_write(codec, RT3261_MIXER_INT_REG, snd_soc_read(codec,RT3261_DUMMY_PR3F));
-		
+	case SND_SOC_DAPM_POST_PMU:
+		if( rt3261->asrc_en == RT3261_ASRC_EN)
+			rt3261_update_eqmode(codec, 2);//BT_VOIP
 		break;
+
+	case SND_SOC_DAPM_PRE_PMD:
+		rt3261_update_eqmode(codec, 0);//NORMAL
+		break;
+
 	default:
 		return 0;
 	}
 
 	return 0;
 }
-
+//bard 8-29 e
 static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY("PLL1", RT3261_PWR_ANLG2,
 			RT3261_PWR_PLL_BIT, 0, NULL, 0),
@@ -1704,8 +2248,13 @@ static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 	/* micbias */
 	SND_SOC_DAPM_SUPPLY("LDO2", RT3261_PWR_ANLG1,
 			RT3261_PWR_LDO2_BIT, 0, NULL, 0),
+	#if 0
 	SND_SOC_DAPM_MICBIAS("micbias1", RT3261_PWR_ANLG2,
 			RT3261_PWR_MB1_BIT, 0),
+	#else
+	SND_SOC_DAPM_MICBIAS("micbias1", SND_SOC_NOPM,
+			0, 0),
+	#endif
 	SND_SOC_DAPM_MICBIAS("micbias2", RT3261_PWR_ANLG2,
 			RT3261_PWR_MB2_BIT, 0),
 	/* Input Lines */
@@ -1748,12 +2297,16 @@ static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 	SND_SOC_DAPM_MIXER("RECMIXR", RT3261_PWR_MIXER, RT3261_PWR_RM_R_BIT, 0,
 			rt3261_rec_r_mix, ARRAY_SIZE(rt3261_rec_r_mix)),
 	/* ADCs */
-	SND_SOC_DAPM_ADC_E("ADC L", NULL, RT3261_PWR_DIG1,
-		RT3261_PWR_ADC_L_BIT, 0, rt3261_adc_event,
+	SND_SOC_DAPM_ADC("ADC L", NULL, SND_SOC_NOPM,
+		0, 0),
+	SND_SOC_DAPM_ADC_E("ADC R", NULL, SND_SOC_NOPM,
+		0, 0, rt3261_adc_event,
 		SND_SOC_DAPM_POST_PMD | SND_SOC_DAPM_POST_PMU),
-	SND_SOC_DAPM_ADC_E("ADC R", NULL, RT3261_PWR_DIG1,
-		RT3261_PWR_ADC_R_BIT, 0, rt3261_adc_event,
-		SND_SOC_DAPM_POST_PMD | SND_SOC_DAPM_POST_PMU),
+
+	SND_SOC_DAPM_SUPPLY("ADC L power",RT3261_PWR_DIG1,
+			RT3261_PWR_ADC_L_BIT, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("ADC R power",RT3261_PWR_DIG1,
+			RT3261_PWR_ADC_R_BIT, 0, NULL, 0),
 	/* ADC Mux */
 	SND_SOC_DAPM_MUX("Stereo ADC L2 Mux", SND_SOC_NOPM, 0, 0,
 				&rt3261_sto_adc_l2_mux),
@@ -1780,12 +2333,14 @@ static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 		rt3261_sto_adc_r_mix, ARRAY_SIZE(rt3261_sto_adc_r_mix)),
 	SND_SOC_DAPM_SUPPLY("mono left filter", RT3261_PWR_DIG2,
 		RT3261_PWR_ADC_MF_L_BIT, 0, NULL, 0),
-	SND_SOC_DAPM_MIXER("Mono ADC MIXL", SND_SOC_NOPM, 0, 0,
-		rt3261_mono_adc_l_mix, ARRAY_SIZE(rt3261_mono_adc_l_mix)),
+	SND_SOC_DAPM_MIXER_E("Mono ADC MIXL", SND_SOC_NOPM, 0, 0,
+		rt3261_mono_adc_l_mix, ARRAY_SIZE(rt3261_mono_adc_l_mix),
+		rt3261_mono_adcl_event, SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU), //bard 3-26
 	SND_SOC_DAPM_SUPPLY("mono right filter", RT3261_PWR_DIG2,
 		RT3261_PWR_ADC_MF_R_BIT, 0, NULL, 0),
-	SND_SOC_DAPM_MIXER("Mono ADC MIXR", SND_SOC_NOPM, 0, 0,
-		rt3261_mono_adc_r_mix, ARRAY_SIZE(rt3261_mono_adc_r_mix)),
+	SND_SOC_DAPM_MIXER_E("Mono ADC MIXR", SND_SOC_NOPM, 0, 0,
+		rt3261_mono_adc_r_mix, ARRAY_SIZE(rt3261_mono_adc_r_mix),
+		rt3261_mono_adcr_event, SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU), //bard 3-26
 
 	/* IF2 Mux */
 	SND_SOC_DAPM_MUX("IF2 ADC L Mux", SND_SOC_NOPM, 0, 0,
@@ -1851,20 +2406,44 @@ static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 
 	/* Output Side */
 	/* DAC mixer before sound effect  */
+#if 0 //org
 	SND_SOC_DAPM_MIXER("DAC MIXL", SND_SOC_NOPM, 0, 0,
 		rt3261_dac_l_mix, ARRAY_SIZE(rt3261_dac_l_mix)),
 	SND_SOC_DAPM_MIXER("DAC MIXR", SND_SOC_NOPM, 0, 0,
 		rt3261_dac_r_mix, ARRAY_SIZE(rt3261_dac_r_mix)),
+#else //bard 8-29
+	SND_SOC_DAPM_MIXER_E("DAC MIXL", SND_SOC_NOPM, 0, 0,
+		rt3261_dac_l_mix, ARRAY_SIZE(rt3261_dac_l_mix),
+		rt3261_dac_event, SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU),
+	SND_SOC_DAPM_MIXER_E("DAC MIXR", SND_SOC_NOPM, 0, 0,
+		rt3261_dac_r_mix, ARRAY_SIZE(rt3261_dac_r_mix),
+		rt3261_dac_event, SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU),
+#endif
 
 	/* DAC2 channel Mux */
 	SND_SOC_DAPM_MUX("DAC L2 Mux", SND_SOC_NOPM, 0, 0,
 				&rt3261_dac_l2_mux),
 	SND_SOC_DAPM_MUX("DAC R2 Mux", SND_SOC_NOPM, 0, 0,
 				&rt3261_dac_r2_mux),
+#if 0 //org
 	SND_SOC_DAPM_PGA("DAC L2 Volume", RT3261_PWR_DIG1,
 			RT3261_PWR_DAC_L2_BIT, 0, NULL, 0),
 	SND_SOC_DAPM_PGA("DAC R2 Volume", RT3261_PWR_DIG1,
 			RT3261_PWR_DAC_R2_BIT, 0, NULL, 0),
+#else //bard 9-26
+	SND_SOC_DAPM_PGA("DAC L2 Volume", SND_SOC_NOPM,
+			0, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("DAC R2 Volume", SND_SOC_NOPM,
+			0, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("DAC L1 Power", RT3261_PWR_DIG1,
+		RT3261_PWR_DAC_L1_BIT, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("DAC R1 Power", RT3261_PWR_DIG1,
+		RT3261_PWR_DAC_R1_BIT, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("DAC L2 Power", RT3261_PWR_DIG1,
+		RT3261_PWR_DAC_L2_BIT, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("DAC R2 Power", RT3261_PWR_DIG1,
+		RT3261_PWR_DAC_R2_BIT, 0, NULL, 0),
+#endif
 
 	/* DAC Mixer */
 	SND_SOC_DAPM_MIXER("Stereo DAC MIXL", SND_SOC_NOPM, 0, 0,
@@ -1879,11 +2458,11 @@ static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 		rt3261_dig_l_mix, ARRAY_SIZE(rt3261_dig_l_mix)),
 	SND_SOC_DAPM_MIXER("DIG MIXR", SND_SOC_NOPM, 0, 0,
 		rt3261_dig_r_mix, ARRAY_SIZE(rt3261_dig_r_mix)),
-	SND_SOC_DAPM_MUX_E("Mono dacr Mux", SND_SOC_NOPM, 0, 0,
-				&rt3261_dacr2_mux, rt3261_index_sync_event,
-				SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MUX("Mono dacr Mux", SND_SOC_NOPM, 0, 0,
+		&rt3261_dacr2_mux),
 
 	/* DACs */
+#if 0 //org
 	SND_SOC_DAPM_DAC("DAC L1", NULL, RT3261_PWR_DIG1,
 			RT3261_PWR_DAC_L1_BIT, 0),
 	SND_SOC_DAPM_DAC("DAC L2", NULL, RT3261_PWR_DIG1,
@@ -1892,6 +2471,16 @@ static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 			RT3261_PWR_DAC_R1_BIT, 0),
 	SND_SOC_DAPM_DAC("DAC R2", NULL, RT3261_PWR_DIG1,
 			RT3261_PWR_DAC_R2_BIT, 0),
+#else //bard 9-26
+	SND_SOC_DAPM_DAC("DAC L1", NULL, SND_SOC_NOPM, 0, 0),
+	SND_SOC_DAPM_DAC("DAC R1", NULL, SND_SOC_NOPM, 0, 0),
+	SND_SOC_DAPM_DAC("DAC L2", NULL, SND_SOC_NOPM, 0, 0),
+	SND_SOC_DAPM_DAC("DAC R2", NULL, SND_SOC_NOPM, 0, 0),
+#endif
+	SND_SOC_DAPM_PGA("DAC 1", SND_SOC_NOPM,
+		0, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("DAC 2", SND_SOC_NOPM, 
+		0, 0, NULL, 0),
 	/* SPK/OUT Mixer */
 	SND_SOC_DAPM_MIXER("SPK MIXL", RT3261_PWR_MIXER, RT3261_PWR_SM_L_BIT,
 		0, rt3261_spk_l_mix, ARRAY_SIZE(rt3261_spk_l_mix)),
@@ -1914,14 +2503,16 @@ static const struct snd_soc_dapm_widget rt3261_dapm_widgets[] = {
 		RT3261_PWR_HV_L_BIT, 0, NULL, 0),
 	SND_SOC_DAPM_PGA("HPOVOL R", RT3261_PWR_VOL,
 		RT3261_PWR_HV_R_BIT, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("HPOVOL", SND_SOC_NOPM, 
+		0, 0, NULL, 0),
 	/* SPO/HPO/LOUT/Mono Mixer */
 	SND_SOC_DAPM_MIXER("SPOL MIX", SND_SOC_NOPM, 0,
 		0, rt3261_spo_l_mix, ARRAY_SIZE(rt3261_spo_l_mix)),
 	SND_SOC_DAPM_MIXER("SPOR MIX", SND_SOC_NOPM, 0,
 		0, rt3261_spo_r_mix, ARRAY_SIZE(rt3261_spo_r_mix)),
-	SND_SOC_DAPM_MIXER("HPOL MIX", SND_SOC_NOPM, 0, 0,
-		rt3261_hpo_mix, ARRAY_SIZE(rt3261_hpo_mix)),
-	SND_SOC_DAPM_MIXER("HPOR MIX", SND_SOC_NOPM, 0, 0,
+	SND_SOC_DAPM_MIXER("DAC SPK", SND_SOC_NOPM, 0,
+		0, rt3261_spo_dac_mix, ARRAY_SIZE(rt3261_spo_dac_mix)), //bard 8-27
+	SND_SOC_DAPM_MIXER("HPO MIX", SND_SOC_NOPM, 0, 0,
 		rt3261_hpo_mix, ARRAY_SIZE(rt3261_hpo_mix)),
 	SND_SOC_DAPM_MIXER("LOUT MIX", SND_SOC_NOPM, 0, 0,
 		rt3261_lout_mix, ARRAY_SIZE(rt3261_lout_mix)),
@@ -1993,7 +2584,9 @@ static const struct snd_soc_dapm_route rt3261_dapm_routes[] = {
 	{"RECMIXR", "OUT MIXR Switch", "OUT MIXR"},
 
 	{"ADC L", NULL, "RECMIXL"},
+	{"ADC L", NULL, "ADC L power"},
 	{"ADC R", NULL, "RECMIXR"},
+	{"ADC R", NULL, "ADC R power"},
 
 	{"DMIC L1", NULL, "DMIC CLK"},
 	{"DMIC L2", NULL, "DMIC CLK"},
@@ -2142,8 +2735,10 @@ static const struct snd_soc_dapm_route rt3261_dapm_routes[] = {
 
 	{"DAC MIXL", "Stereo ADC Switch", "Stereo ADC MIXL"},
 	{"DAC MIXL", "INF1 Switch", "IF1 DAC L"},
+	{"DAC MIXL", NULL, "DAC L1 Power"}, //bard 9-26
 	{"DAC MIXR", "Stereo ADC Switch", "Stereo ADC MIXR"},
 	{"DAC MIXR", "INF1 Switch", "IF1 DAC R"},
+	{"DAC MIXR", NULL, "DAC R1 Power"}, //bard 9-26
 
 	{"ANC", NULL, "Stereo ADC MIXL"},
 	{"ANC", NULL, "Stereo ADC MIXR"},
@@ -2155,16 +2750,14 @@ static const struct snd_soc_dapm_route rt3261_dapm_routes[] = {
 	{"DAC L2 Mux", "IF3", "IF3 DAC L"},
 	{"DAC L2 Mux", "Base L/R", "Audio DSP"},
 	{"DAC L2 Volume", NULL, "DAC L2 Mux"},
+	{"DAC L2 Volume", NULL, "DAC L2 Power"}, //bard 9-26
 
 	{"DAC R2 Mux", "IF2", "IF2 DAC R"},
 	{"DAC R2 Mux", "IF3", "IF3 DAC R"},
-#if (CONFIG_SND_SOC_RT3261_MODULE | CONFIG_SND_SOC_RT3261)
 	{"DAC R2 Volume", NULL, "Mono dacr Mux"},
 	{"Mono dacr Mux", "TxDC_R", "DAC R2 Mux"},
 	{"Mono dacr Mux", "TxDP_R", "IF2 ADC R Mux"},
-#else
-	{"DAC R2 Volume", NULL, "DAC R2 Mux"},
-#endif
+	{"DAC R2 Volume", NULL, "DAC R2 Power"}, //bsrd 9-26
 
 	{"Stereo DAC MIXL", "DAC L1 Switch", "DAC MIXL"},
 	{"Stereo DAC MIXL", "DAC L2 Switch", "DAC L2 Volume"},
@@ -2187,12 +2780,16 @@ static const struct snd_soc_dapm_route rt3261_dapm_routes[] = {
 
 	{"DAC L1", NULL, "Stereo DAC MIXL"},
 	{"DAC L1", NULL, "PLL1", check_sysclk1_source},
+	{"DAC L1", NULL, "DAC L1 Power"}, //bard 9-26
 	{"DAC R1", NULL, "Stereo DAC MIXR"},
 	{"DAC R1", NULL, "PLL1", check_sysclk1_source},
+	{"DAC R1", NULL, "DAC R1 Power"}, //bard 9-26
 	{"DAC L2", NULL, "Mono DAC MIXL"},
 	{"DAC L2", NULL, "PLL1", check_sysclk1_source},
+	{"DAC L2", NULL, "DAC L2 Power"}, //bard 9-26
 	{"DAC R2", NULL, "Mono DAC MIXR"},
 	{"DAC R2", NULL, "PLL1", check_sysclk1_source},
+	{"DAC R2", NULL, "DAC R2 Power"}, //bard 9-26
 
 	{"SPK MIXL", "REC MIXL Switch", "RECMIXL"},
 	{"SPK MIXL", "INL Switch", "INL VOL"},
@@ -2228,9 +2825,14 @@ static const struct snd_soc_dapm_route rt3261_dapm_routes[] = {
 	{"HPOVOL R", NULL, "OUT MIXR"},
 	{"OUTVOL L", NULL, "OUT MIXL"},
 	{"OUTVOL R", NULL, "OUT MIXR"},
-
+#if 0//org
 	{"SPOL MIX", "DAC R1 Switch", "DAC R1"},
 	{"SPOL MIX", "DAC L1 Switch", "DAC L1"},
+#else //bard 8-27
+	{"SPOL MIX", "DAC Switch", "DAC SPK"},
+	{"DAC SPK", "DAC L1 Switch", "DAC L1"},
+	{"DAC SPK", "DAC R1 Switch", "DAC R1"},
+#endif
 	{"SPOL MIX", "SPKVOL R Switch", "SPKVOL R"},
 	{"SPOL MIX", "SPKVOL L Switch", "SPKVOL L"},
 	{"SPOL MIX", "BST1 Switch", "BST1"},
@@ -2238,12 +2840,15 @@ static const struct snd_soc_dapm_route rt3261_dapm_routes[] = {
 	{"SPOR MIX", "SPKVOL R Switch", "SPKVOL R"},
 	{"SPOR MIX", "BST1 Switch", "BST1"},
 
-	{"HPOL MIX", "DAC2 Switch", "DAC L2"},
-	{"HPOL MIX", "DAC1 Switch", "DAC L1"},
-	{"HPOL MIX", "HPVOL Switch", "HPOVOL L"},
-	{"HPOR MIX", "DAC2 Switch", "DAC R2"},
-	{"HPOR MIX", "DAC1 Switch", "DAC R1"},
-	{"HPOR MIX", "HPVOL Switch", "HPOVOL R"},
+	{"DAC 2", NULL, "DAC L2"},
+	{"DAC 2", NULL, "DAC R2"},
+	{"DAC 1", NULL, "DAC L1"},
+	{"DAC 1", NULL, "DAC R1"},
+	{"HPOVOL", NULL, "HPOVOL L"},
+	{"HPOVOL", NULL, "HPOVOL R"},
+	{"HPO MIX", "DAC2 Switch", "DAC 2"},
+	{"HPO MIX", "DAC1 Switch", "DAC 1"},
+	{"HPO MIX", "HPVOL Switch", "HPOVOL"},
 
 	{"LOUT MIX", "DAC L1 Switch", "DAC L1"},
 	{"LOUT MIX", "DAC R1 Switch", "DAC R1"},
@@ -2263,8 +2868,7 @@ static const struct snd_soc_dapm_route rt3261_dapm_routes[] = {
 	{"SPORP", NULL, "SPK amp"},
 	{"SPORN", NULL, "SPK amp"},
 	
-	{"HP amp", NULL, "HPOL MIX"},
-	{"HP amp", NULL, "HPOR MIX"},
+	{"HP amp", NULL, "HPO MIX"},
 	{"HPOL", NULL, "HP amp"},
 	{"HPOR", NULL, "HP amp"},
 
@@ -2320,10 +2924,15 @@ static int get_sdp_info(struct snd_soc_codec *codec, int dai_id)
 static int get_clk_info(int sclk, int rate)
 {
 	int i, pd[] = {1, 2, 3, 4, 6, 8, 12, 16};
+	struct snd_soc_codec *codec = rt3261_codec;
+	struct rt3261_priv *rt3261 = snd_soc_codec_get_drvdata(codec);
 
 	if (sclk <= 0 || rate <= 0)
 		return -EINVAL;
-
+//bard 8-29 s
+	if (rt3261->asrc_en)
+		return 1;
+//bard 8-29 e
 	rate = rate << 8;
 	for (i = 0; i < ARRAY_SIZE(pd); i++)
 		if (sclk == rate * pd[i])
@@ -2342,6 +2951,8 @@ static int rt3261_hw_params(struct snd_pcm_substream *substream,
 	int pre_div, bclk_ms, frame_size;
 
 	rt3261->lrck[dai->id] = params_rate(params);
+	if(dai->id == 1)
+		rt3261->lrck[dai->id] = 8000;
 	pre_div = get_clk_info(rt3261->sysclk, rt3261->lrck[dai->id]);
 	if (pre_div < 0) {
 		dev_err(codec->dev, "Unsupported clock setting\n");
@@ -2377,6 +2988,7 @@ static int rt3261_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	dai_sel = get_sdp_info(codec, dai->id);
+	dai_sel |= (RT3261_U_IF1 | RT3261_U_IF2);
 	if (dai_sel < 0) {
 		dev_err(codec->dev, "Failed to get sdp info: %d\n", dai_sel);
 		return -EINVAL;
@@ -2387,16 +2999,20 @@ static int rt3261_hw_params(struct snd_pcm_substream *substream,
 			pre_div << RT3261_I2S_PD1_SFT;
 		snd_soc_update_bits(codec, RT3261_I2S1_SDP,
 			RT3261_I2S_DL_MASK, val_len);
-		snd_soc_update_bits(codec, RT3261_ADDA_CLK1, mask_clk, val_clk);
+		//snd_soc_update_bits(codec, RT3261_ADDA_CLK1, mask_clk, val_clk);
 	}
 	if (dai_sel & RT3261_U_IF2) {
-		mask_clk = RT3261_I2S_BCLK_MS2_MASK | RT3261_I2S_PD2_MASK;
-		val_clk = bclk_ms << RT3261_I2S_BCLK_MS2_SFT |
+		mask_clk |= RT3261_I2S_BCLK_MS2_MASK | RT3261_I2S_PD2_MASK;
+		val_clk |= bclk_ms << RT3261_I2S_BCLK_MS2_SFT |
 			pre_div << RT3261_I2S_PD2_SFT;
 		snd_soc_update_bits(codec, RT3261_I2S2_SDP,
 			RT3261_I2S_DL_MASK, val_len);
-		snd_soc_update_bits(codec, RT3261_ADDA_CLK1, mask_clk, val_clk);
+		//snd_soc_update_bits(codec, RT3261_ADDA_CLK1, mask_clk, val_clk);
 	}
+	if (rt3261->asrc_en)
+		snd_soc_write(codec, RT3261_ADDA_CLK1, 0x1114);
+	else 
+		snd_soc_update_bits(codec, RT3261_ADDA_CLK1, mask_clk, val_clk);
 
 	return 0;
 }
@@ -2682,14 +3298,17 @@ static int rt3261_set_bias_level(struct snd_soc_codec *codec,
 		break;
 
 	case SND_SOC_BIAS_PREPARE:
+		snd_soc_update_bits(codec, RT3261_HP_VOL,
+			RT3261_L_MUTE | RT3261_R_MUTE, RT3261_L_MUTE | RT3261_R_MUTE); //bard 12-7
+		snd_soc_update_bits(codec, RT3261_SPK_VOL,
+			RT3261_L_MUTE | RT3261_R_MUTE,
+			RT3261_L_MUTE | RT3261_R_MUTE);
 		snd_soc_update_bits(codec, RT3261_PWR_ANLG2,
 			RT3261_PWR_MB1 | RT3261_PWR_MB2,
 			RT3261_PWR_MB1 | RT3261_PWR_MB2);
 		break;
 
 	case SND_SOC_BIAS_STANDBY:
-		snd_soc_update_bits(codec, RT3261_PWR_ANLG2,
-			RT3261_PWR_MB1 | RT3261_PWR_MB2, 0);
 		if (SND_SOC_BIAS_OFF == codec->dapm.bias_level) {
 			snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
 				RT3261_PWR_VREF1 | RT3261_PWR_MB |
@@ -2701,6 +3320,9 @@ static int rt3261_set_bias_level(struct snd_soc_codec *codec,
 				RT3261_PWR_FV1 | RT3261_PWR_FV2,
 				RT3261_PWR_FV1 | RT3261_PWR_FV2);
 			snd_soc_write(codec, RT3261_GEN_CTRL1, 0x3701);
+			snd_soc_update_bits(codec, RT3261_PWR_ANLG2,
+				RT3261_PWR_MB1 | RT3261_PWR_MB2,
+				RT3261_PWR_MB1 | RT3261_PWR_MB2);
 			codec->cache_only = false;
 			codec->cache_sync = 1;
 			snd_soc_cache_sync(codec);
@@ -2735,32 +3357,39 @@ static int rt3261_probe(struct snd_soc_codec *codec)
 {
 	struct rt3261_priv *rt3261 = snd_soc_codec_get_drvdata(codec);
 	int ret;
-	struct clk *iis_clk;
 
-	pr_info("Codec driver version %s\n", VERSION);
+	#if defined (CONFIG_SND_SOC_RT3224)
+	pr_info("Codec driver version %s, in fact you choose rt3224, no dsp!\n", VERSION);
+	#else
+	pr_info("Codec driver version %s, in fact you choose rt3261 with a dsp!\n", VERSION);
+	#endif
 
 	ret = snd_soc_codec_set_cache_io(codec, 8, 16, SND_SOC_I2C);
 	if (ret != 0) {
 		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
 		return ret;
 	}
+	codec->write = rt3261_write;
 	
 	#ifdef RT3261_PROC	
 	rt3261_proc_init();
 	#endif
 
+	#if defined (CONFIG_SND_SOC_RT5623)
+	struct clk *iis_clk;
 	//for rt5623 MCLK use
 	iis_clk = clk_get_sys("rk29_i2s.2", "i2s");
 	if (IS_ERR(iis_clk)) {
-		printk("failed to get i2s clk\n");
+		DBG("failed to get i2s clk\n");
 		ret = PTR_ERR(iis_clk);
 	}else{
-		printk("I2S2 got i2s clk ok!\n");
+		DBG("I2S2 got i2s clk ok!\n");
 		clk_enable(iis_clk);
 		clk_set_rate(iis_clk, 11289600);
 		rk30_mux_api_set(GPIO0D0_I2S22CHCLK_SMCCSN0_NAME, GPIO0D_I2S2_2CH_CLK);
 		clk_put(iis_clk);
 	}
+	#endif
 	
 	rt3261_reset(codec);
 	snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
@@ -2788,13 +3417,21 @@ static int rt3261_probe(struct snd_soc_codec *codec)
 	}
 	snd_soc_write(codec, RT3261_GEN_CTRL2, 0x4040);
 	ret = snd_soc_read(codec, RT3261_VENDOR_ID);
-	printk("read 0x%x=0x%x\n",RT3261_VENDOR_ID,ret);
+	printk("read codec chip id is 0x%x\n",ret);
 	if(0x5==ret) {
 		snd_soc_update_bits(codec, RT3261_JD_CTRL, 
 			RT3261_JD1_IN4P_MASK | RT3261_JD2_IN4N_MASK,
 			RT3261_JD1_IN4P_EN | RT3261_JD2_IN4N_EN);
 	}
+	else if(0x3==ret)
+	{
+		printk("you use an old chip, please use a new one\n");
+	}
+	snd_soc_update_bits(codec, RT3261_PWR_ANLG1,
+			RT3261_PWR_HP_L | RT3261_PWR_HP_R,
+			0<<7 | 0<<6 );
 	rt3261_reg_init(codec);
+	rt3261_customer_redefine(codec, rt3261);
 
 	codec->dapm.bias_level = SND_SOC_BIAS_STANDBY;
 	rt3261->codec = codec;
@@ -2806,8 +3443,8 @@ static int rt3261_probe(struct snd_soc_codec *codec)
 	snd_soc_dapm_add_routes(&codec->dapm, rt3261_dapm_routes,
 			ARRAY_SIZE(rt3261_dapm_routes));
 
-#if 0
-#if (CONFIG_SND_SOC_RT3261_MODULE | CONFIG_SND_SOC_RT3261)
+
+#if defined (CONFIG_SND_SOC_RT3261)
 	rt3261->dsp_sw = RT3261_DSP_AEC_NS_FENS;
 	rt3261_dsp_probe(codec);
 #endif
@@ -2823,13 +3460,13 @@ static int rt3261_probe(struct snd_soc_codec *codec)
 #endif
 #endif
 
+
 	ret = device_create_file(codec->dev, &dev_attr_index_reg);
 	if (ret != 0) {
 		dev_err(codec->dev,
 			"Failed to create index_reg sysfs files: %d\n", ret);
 		return ret;
 	}
-#endif
 	rt3261_codec = codec;
 	return 0;
 }
@@ -2843,14 +3480,14 @@ static int rt3261_remove(struct snd_soc_codec *codec)
 #ifdef CONFIG_PM
 static int rt3261_suspend(struct snd_soc_codec *codec, pm_message_t state)
 {
-#if (CONFIG_SND_SOC_RT3261_MODULE | CONFIG_SND_SOC_RT3261)
+#if defined (CONFIG_SND_SOC_RT3261)
 	/* After opening LDO of DSP, then close LDO of codec.
 	 * (1) DSP LDO power on
 	 * (2) DSP core power off
 	 * (3) DSP IIS interface power off
 	 * (4) Toggle pin of codec LDO1 to power off
 	 */
-	//rt3261_dsp_suspend(codec, state);
+	rt3261_dsp_suspend(codec, state);
 #endif
 	rt3261_set_bias_level(codec, SND_SOC_BIAS_OFF);
 	return 0;
@@ -2859,9 +3496,9 @@ static int rt3261_suspend(struct snd_soc_codec *codec, pm_message_t state)
 static int rt3261_resume(struct snd_soc_codec *codec)
 {
 	rt3261_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-#if (CONFIG_SND_SOC_RT3261_MODULE | CONFIG_SND_SOC_RT3261)
+#if defined (CONFIG_SND_SOC_RT3261)
 	/* After opening LDO of codec, then close LDO of DSP. */
-	//rt3261_dsp_resume(codec);
+	rt3261_dsp_resume(codec);
 #endif
 	return 0;
 }
@@ -2928,6 +3565,7 @@ static struct snd_soc_codec_driver soc_codec_dev_rt3261 = {
 	.remove = rt3261_remove,
 	.suspend = rt3261_suspend,
 	.resume = rt3261_resume,
+	.write = rt3261_write,
 	.set_bias_level = rt3261_set_bias_level,
 	.reg_cache_size = RT3261_VENDOR_ID2 + 1,
 	.reg_word_size = sizeof(u16),
@@ -2956,9 +3594,19 @@ static int __devinit rt3261_i2c_probe(struct i2c_client *i2c,
 
 	rt3261->codec_en_gpio = pdata->codec_en_gpio;
 	rt3261->io_init = pdata->io_init;
+	rt3261->spk_num = pdata->spk_num;
+	rt3261->modem_input_mode = pdata->modem_input_mode;
+	rt3261->lout_to_modem_mode = pdata->lout_to_modem_mode;
+	rt3261->spk_amplify = pdata->spk_amplify;
+	rt3261->playback_if1_data_control = pdata->playback_if1_data_control;
+	rt3261->playback_if2_data_control = pdata->playback_if2_data_control;
 
 	if(rt3261->io_init)
 		rt3261->io_init(pdata->codec_en_gpio, pdata->codec_en_gpio_info.iomux_name, pdata->codec_en_gpio_info.iomux_mode);
+
+	#if defined (CONFIG_SND_SOC_RT5623)
+	rt3261->modem_is_open = 0;
+	#endif
 
 	i2c_set_clientdata(i2c, rt3261);
 	DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);
@@ -3024,6 +3672,9 @@ static ssize_t rt3261_proc_write(struct file *file, const char __user *buffer,
 	int reg;
 	int i;
 	int value;
+	#if defined (CONFIG_SND_SOC_RT3261)
+	struct rt3261_dsp_param param;
+	#endif
 
 	cookie_pot = (char *)vmalloc( len );
 	if (!cookie_pot) 
@@ -3038,21 +3689,11 @@ static ssize_t rt3261_proc_write(struct file *file, const char __user *buffer,
 
 	switch(cookie_pot[0])
 	{
-		case 'd':
-		case 'D':
-			debug_write_read ++;
-			debug_write_read %= 2;
-			if(debug_write_read != 0)
-				printk("Debug read and write reg on\n");
-			else	
-				printk("Debug read and write reg off\n");	
-			break;	
 		case 'r':
 		case 'R':
 			printk("Read reg debug\n");		
 			if(cookie_pot[1] ==':')
 			{
-				debug_write_read = 1;
 				strsep(&cookie_pot,":");
 				while((p=strsep(&cookie_pot,",")))
 				{
@@ -3060,7 +3701,6 @@ static ssize_t rt3261_proc_write(struct file *file, const char __user *buffer,
 					value = rt3261_read(rt3261_codec,reg);
 					printk("rt3261_read:0x%04x = 0x%04x\n",reg,value);
 				}
-				debug_write_read = 0;
 				printk("\n");
 			}
 			else
@@ -3074,7 +3714,6 @@ static ssize_t rt3261_proc_write(struct file *file, const char __user *buffer,
 			printk("Write reg debug\n");		
 			if(cookie_pot[1] ==':')
 			{
-				debug_write_read = 1;
 				strsep(&cookie_pot,":");
 				while((p=strsep(&cookie_pot,"=")))
 				{
@@ -3084,7 +3723,6 @@ static ssize_t rt3261_proc_write(struct file *file, const char __user *buffer,
 					rt3261_write(rt3261_codec,reg,value);
 					printk("rt3261_write:0x%04x = 0x%04x\n",reg,value);
 				}
-				debug_write_read = 0;
 				printk("\n");
 			}
 			else
@@ -3094,15 +3732,76 @@ static ssize_t rt3261_proc_write(struct file *file, const char __user *buffer,
 			}
 			break;
 		case 'a':
-			printk("Dump rt3261 dsp reg \n");		
+			printk("Dump rt3261 index reg \n");		
 
 			for (i = 0; i < 0xb4; i++) 
 			{
 				value = rt3261_index_read(rt3261_codec, i);
 				printk("rt3261_index_read:0x%04x = 0x%04x\n",i,value);
 			}
-
-			break;		
+			break;	
+		#if defined (CONFIG_SND_SOC_RT3261)
+		case 'b':
+			param.cmd_fmt =  0x00e0;
+			param.cmd = RT3261_DSP_CMD_MW;
+			printk("Write dsp reg debug\n");		
+			if(cookie_pot[1] ==':')
+			{
+				strsep(&cookie_pot,":");
+				while((p=strsep(&cookie_pot,"=")))
+				{
+					param.addr = simple_strtol(p,NULL,16);
+					p=strsep(&cookie_pot,",");
+					param.data = simple_strtol(p,NULL,16);
+					rt3261_dsp_write(rt3261_codec,&param);
+					printk("rt3261_dsp_write:0x%04x = 0x%04x\n",param.addr,param.data);
+				}
+				printk("\n");
+			}
+			break;
+		case 'c':
+			printk("Read dsp reg debug\n");		
+			if(cookie_pot[1] ==':')
+			{
+				strsep(&cookie_pot,":");
+				while((p=strsep(&cookie_pot,",")))
+				{
+					reg = simple_strtol(p,NULL,16);
+					value = rt3261_dsp_read(rt3261_codec,reg);
+					printk("rt3261_dsp_read:0x%04x = 0x%04x\n",reg,value);
+				}
+				printk("\n");
+			}
+			break;
+		#endif
+		case 'd':
+			if(cookie_pot[1] ==':')
+			{
+				strsep(&cookie_pot,":");
+				while((p=strsep(&cookie_pot,"=")))
+				{
+					reg = simple_strtol(p,NULL,16);
+					p=strsep(&cookie_pot,",");
+					value = simple_strtol(p,NULL,16);
+					rt3261_index_write(rt3261_codec,reg,value);
+					printk("rt3261_index_write:0x%04x = 0x%04x\n",reg,value);
+				}
+				printk("\n");
+			}
+			break;
+		case 'e':	
+			if(cookie_pot[1] ==':')
+			{
+				strsep(&cookie_pot,":");
+				while((p=strsep(&cookie_pot,",")))
+				{
+					reg = simple_strtol(p,NULL,16);
+					value = rt3261_index_read(rt3261_codec,reg);
+					printk("rt3261_index_read:0x%04x = 0x%04x\n",reg,value);
+				}
+				printk("\n");
+			}
+			break;
 		default:
 			printk("Help for rt3261_ts .\n-->The Cmd list: \n");
 			printk("-->'d&&D' Open or Off the debug\n");

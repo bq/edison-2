@@ -146,9 +146,9 @@ static long mt6229_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch(cmd)
 	{
 		case MT6229_RESET:					
-			modem_poweron_off(0);
+			gpio_set_value(pdata->bp_power, GPIO_HIGH);
 			msleep(10);
-			modem_poweron_off(1);
+			gpio_set_value(pdata->bp_power, GPIO_LOW);
 			break;
 		default:
 			break;
@@ -312,7 +312,6 @@ void mt6229_shutdown(struct platform_device *pdev)
 	struct modem_dev *mt6229_data = platform_get_drvdata(pdev);
 	
 	modem_poweron_off(0);
-	gpio_set_value(pdata->modem_power_en, GPIO_LOW);
 
 	if(pdata->io_deinit)
 		pdata->io_deinit();

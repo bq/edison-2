@@ -25,12 +25,13 @@
 #include <linux/proc_fs.h>
 #include <asm/uaccess.h>
 #include <mach/board.h>
+#include <mach/iomux.h>
 #include <linux/power/smb347-charger.h>
 
 #include <linux/interrupt.h>
 #include "../usb/dwc_otg/dwc_otg_driver.h"
 
-#if 0
+#if 1
 #define xhc_printk(format, ...)       printk(format, ## __VA_ARGS__)
 #else 
 #define xhc_printk(format, ...)
@@ -66,6 +67,7 @@ static const unsigned int icl_tbl[] = {
 
 extern dwc_otg_device_t* g_otgdev;
 struct smb347_device * g_smb347_dev;
+static void smb347_init(struct i2c_client *client);
 
 static int smb347_read(struct i2c_client *client, const char reg, char *buf, int len)
 {
@@ -163,6 +165,47 @@ int smb347_is_charging(void)
 
 EXPORT_SYMBOL(smb347_is_charging);
 
+void smb347_set_something(void)
+{
+	u8 reg;
+
+	smb347_init(g_smb347_dev->client);
+	return;
+}
+
+EXPORT_SYMBOL(smb347_set_something);
+
+void smb347_set_charging(void)
+{
+	u8 val;
+
+        val = 0x26;
+	smb347_write(g_smb347_dev->client, 0x03, &val, 1);
+
+        smb347_read(g_smb347_dev->client, 0x04, &val, 1);
+        val &= 0x7f;
+	smb347_write(g_smb347_dev->client, 0x04, &val, 1);
+
+	return;
+}
+
+EXPORT_SYMBOL(smb347_set_charging);
+
+void smb347_set_discharging(void)
+{
+	u8 val;
+
+        val = 0x20;
+	smb347_write(g_smb347_dev->client, 0x03, &val, 1);
+
+        smb347_read(g_smb347_dev->client, 0x04, &val, 1);
+        val |= 0x80;
+	smb347_write(g_smb347_dev->client, 0x04, &val, 1);
+
+	return;
+}
+
+EXPORT_SYMBOL(smb347_set_discharging);
 
 /* Convert current to register value using lookup table */
 static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
@@ -188,8 +231,10 @@ static int smb347_set_current_limits(struct smb347_device *smb_dev)
                         return ret;
                 }
                 ret = (ret << 4) + ret;
+        	ret = 0x77; //Hardcode 2000mA 2012-11-06
                 xhc_printk("ret = %x\n", ret);
                 ret = smb347_write(smb_dev->client, 0x01, &ret, 1);
+                xhc_printk("ret = %x\n", ret);
                 if (ret < 0) {
                         return ret;
                 }
@@ -254,6 +299,19 @@ static void smb347_init(struct i2c_client *client)
         reg = 0x80;
 	smb347_write(client, 0x30, &reg, 1);
 
+        reg = 0xfd;
+	smb347_write(client, 0x00, &reg, 1);
+
+        reg = 0x77;
+	smb347_write(client, 0x01, &reg, 1);
+
+        reg = 0x26;
+	smb347_write(client, 0x03, &reg, 1);
+
+        smb347_read(client, 0x05, &reg, 1);
+        reg |= 0x80;
+	smb347_write(client, 0x05, &reg, 1);
+
         /* close interrupt */
         smb347_read(client, 0x38, &reg, 1);
         smb347_read(client, 0x3a, &reg, 1);
@@ -261,17 +319,16 @@ static void smb347_init(struct i2c_client *client)
         smb347_write(client, 0x0c, &reg, 1);
         smb347_write(client, 0x0d, &reg, 1);
         
- 	if (g_smb347_dev->info->otg_power_form_smb == 0) {       
-        	/* set dc charge when bosh inser dc and usb */
-        	smb347_read(client, 0x02, &reg, 1);
-        	reg = reg & 0xfb;
-        	smb347_write(client, 0x02, &reg, 1);
-        }
+	/* set dc charge when bosh inser dc and usb */
+	smb347_read(client, 0x02, &reg, 1);
+	reg = reg & 0xfb;
+	smb347_write(client, 0x02, &reg, 1);
 
 
         smb347_set_otg_control(g_smb347_dev);
         smb347_set_current_limits(g_smb347_dev);
         
+	dump_smb347_reg(g_smb347_dev);
 }
 
 static void smb347_set_current_work(struct work_struct *work)
@@ -328,6 +385,7 @@ static int smb347_battery_probe(struct i2c_client *client,
         wq = create_singlethread_workqueue("smb347_det");
 
 	if(info->chg_susp_pin) {
+		rk30_mux_api_set(GPIO4D1_SMCDATA9_TRACEDATA9_NAME, 0);
 		ret = gpio_request(info->chg_susp_pin, "chg susp pin");
 		if (ret != 0) {
 			gpio_free(info->chg_susp_pin);
@@ -352,6 +410,7 @@ static int smb347_battery_probe(struct i2c_client *client,
 
 	if(info->chg_en_pin)
 	{
+		rk30_mux_api_set(GPIO4D5_SMCDATA13_TRACEDATA13_NAME, 0);
 		ret = gpio_request(info->chg_en_pin, "chg en pin");
 		if (ret != 0) {
 			gpio_free(info->chg_en_pin);
@@ -361,11 +420,11 @@ static int smb347_battery_probe(struct i2c_client *client,
 		gpio_direction_output(info->chg_en_pin, 0);
 		gpio_set_value(info->chg_en_pin, GPIO_LOW);
 	}
-
+	mdelay(100);
 	smb347_init(client);
 
 	INIT_DELAYED_WORK(&smb347_dev->work,smb347_set_current_work);
-        schedule_delayed_work(&smb347_dev->work, msecs_to_jiffies(10000));	
+        schedule_delayed_work(&smb347_dev->work, msecs_to_jiffies(3*1000));	
 
         ret = device_create_file(&client->dev,&smb_debug);
 	if(ret) {
@@ -420,7 +479,6 @@ static int __init smb347_battery_init(void)
 {
 	int ret;
 	
-	printk("smb347 driver version 20121016\n");
 	ret = i2c_add_driver(&smb347_battery_driver);
 	if (ret)
 		xhc_printk(KERN_ERR "Unable to register smb347 driver\n");
@@ -436,8 +494,8 @@ static void __exit smb347_battery_exit(void)
 	i2c_del_driver(&smb347_battery_driver);   
 }
 
-subsys_initcall_sync(smb347_battery_init);
-
+//subsys_initcall_sync(smb347_battery_init);
+subsys_initcall(smb347_battery_init);
 module_exit(smb347_battery_exit);
 
 /*

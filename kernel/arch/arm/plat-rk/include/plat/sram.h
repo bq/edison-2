@@ -14,6 +14,18 @@
 /* Tag function inside SRAM called from inside SRAM  with this */
 #define __sramlocalfunc __section(.sram.text)
 
+#define GPIO_SWPORTA_DR  0x0000
+#define GPIO_SWPORTA_DDR 0x0004
+
+struct sram_gpio_data {
+       void __iomem *base;
+       unsigned int offset;
+};
+
+extern struct sram_gpio_data __sramdata pmic_sleep,pmic_vsel;
+int sram_gpio_init(int gpio, struct sram_gpio_data *data);
+void __sramfunc sram_gpio_set_value(struct sram_gpio_data data, unsigned int value);
+
 int __init rk29_sram_init(void);
 
 static inline unsigned long ddr_save_sp(unsigned long new_sp)
@@ -32,6 +44,8 @@ static inline unsigned long ddr_save_sp(unsigned long new_sp)
 extern void __sramfunc sram_printch(char byte);
 extern void __sramfunc sram_printascii(const char *s);
 extern void __sramfunc sram_printhex(unsigned int hex);
+extern void __sramfunc sram_log_char(char c);
+extern void __sramfunc sram_log_reset(void);
 
 #endif /* CONFIG_PLAT_RK */
 #endif

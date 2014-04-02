@@ -213,6 +213,14 @@ static int wm8993_put_dc_servo(struct snd_kcontrol *kcontrol,
 }
 
 static const struct snd_kcontrol_new analogue_snd_controls[] = {
+//for mic mute		
+SOC_SINGLE_TLV("Main Mic Capture Volume", WM8993_RIGHT_LINE_INPUT_1_2_VOLUME, 0, 31, 0,
+		  inpga_tlv),
+SOC_SINGLE("Main Mic Capture Switch", WM8993_RIGHT_LINE_INPUT_1_2_VOLUME, 7, 1, 1),		
+SOC_SINGLE("Headset Mic Capture Switch", WM8993_LEFT_LINE_INPUT_1_2_VOLUME, 7, 1, 1),		
+SOC_SINGLE_TLV("Headset Mic Capture Volume", WM8993_LEFT_LINE_INPUT_1_2_VOLUME, 0, 31, 0,
+       inpga_tlv),		
+//end	
 SOC_SINGLE_TLV("IN1L Volume", WM8993_LEFT_LINE_INPUT_1_2_VOLUME, 0, 31, 0,
 	       inpga_tlv),
 SOC_SINGLE("IN1L Switch", WM8993_LEFT_LINE_INPUT_1_2_VOLUME, 7, 1, 1),
@@ -409,6 +417,19 @@ static int hp_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
+		snd_soc_update_bits(codec, WM8993_LEFT_OUTPUT_VOLUME,
+					WM8993_HPOUT1_VU ,
+					0 | 0);
+		snd_soc_update_bits(codec, WM8993_RIGHT_OUTPUT_VOLUME,
+					WM8993_HPOUT1_VU ,
+					0 | 0);
+		snd_soc_update_bits(codec, WM8993_LEFT_OUTPUT_VOLUME,
+					WM8993_HPOUT1_VU ,
+					WM8993_HPOUT1_VU );
+		snd_soc_update_bits(codec, WM8993_RIGHT_OUTPUT_VOLUME,
+					WM8993_HPOUT1_VU ,
+					WM8993_HPOUT1_VU );
+					
 		snd_soc_update_bits(codec, WM8993_CHARGE_PUMP_1,
 				    WM8993_CP_ENA, WM8993_CP_ENA);
 
@@ -565,14 +586,14 @@ SOC_DAPM_SINGLE("Left Output Switch", WM8993_LINE_MIXER1, 0, 1, 0),
 };
 
 static const struct snd_kcontrol_new line2_mix[] = {
-SOC_DAPM_SINGLE("IN2R Switch", WM8993_LINE_MIXER2, 2, 1, 0),
-SOC_DAPM_SINGLE("IN2L Switch", WM8993_LINE_MIXER2, 1, 1, 0),
+SOC_DAPM_SINGLE("IN1L Switch", WM8993_LINE_MIXER2, 2, 1, 0),
+SOC_DAPM_SINGLE("IN1R Switch", WM8993_LINE_MIXER2, 1, 1, 0),
 SOC_DAPM_SINGLE("Output Switch", WM8993_LINE_MIXER2, 0, 1, 0),
 };
 
 static const struct snd_kcontrol_new line2n_mix[] = {
-SOC_DAPM_SINGLE("Left Output Switch", WM8993_LINE_MIXER2, 6, 1, 0),
-SOC_DAPM_SINGLE("Right Output Switch", WM8993_LINE_MIXER2, 5, 1, 0),
+SOC_DAPM_SINGLE("Left Output Switch", WM8993_LINE_MIXER2, 5, 1, 0),
+SOC_DAPM_SINGLE("Right Output Switch", WM8993_LINE_MIXER2, 6, 1, 0),
 };
 
 static const struct snd_kcontrol_new line2p_mix[] = {
@@ -591,6 +612,8 @@ SND_SOC_DAPM_INPUT("IN2RP:VXRP"),
 
 SND_SOC_DAPM_MICBIAS("MICBIAS2", WM8993_POWER_MANAGEMENT_1, 5, 0),
 SND_SOC_DAPM_MICBIAS("MICBIAS1", WM8993_POWER_MANAGEMENT_1, 4, 0),
+
+SND_SOC_DAPM_SUPPLY("LINEOUT_VMID_BUF", WM8993_ANTIPOP1, 7, 0, NULL, 0),
 
 SND_SOC_DAPM_MIXER("IN1L PGA", WM8993_POWER_MANAGEMENT_2, 6, 0,
 		   in1l_pga, ARRAY_SIZE(in1l_pga)),
@@ -804,9 +827,11 @@ static const struct snd_soc_dapm_route lineout1_diff_routes[] = {
 };
 
 static const struct snd_soc_dapm_route lineout1_se_routes[] = {
+	{ "LINEOUT1N Mixer", NULL, "LINEOUT_VMID_BUF" },
 	{ "LINEOUT1N Mixer", "Left Output Switch", "Left Output PGA" },
 	{ "LINEOUT1N Mixer", "Right Output Switch", "Right Output PGA" },
 
+	{ "LINEOUT1P Mixer", NULL, "LINEOUT_VMID_BUF" },
 	{ "LINEOUT1P Mixer", "Left Output Switch", "Left Output PGA" },
 
 	{ "LINEOUT1N Driver", NULL, "LINEOUT1N Mixer" },
@@ -814,8 +839,8 @@ static const struct snd_soc_dapm_route lineout1_se_routes[] = {
 };
 
 static const struct snd_soc_dapm_route lineout2_diff_routes[] = {
-	{ "LINEOUT2 Mixer", "IN2L Switch", "IN2L PGA" },
-	{ "LINEOUT2 Mixer", "IN2R Switch", "IN2R PGA" },
+	{ "LINEOUT2 Mixer", "IN1L Switch", "IN1L PGA" },
+	{ "LINEOUT2 Mixer", "IN1R Switch", "IN1R PGA" },
 	{ "LINEOUT2 Mixer", "Output Switch", "Right Output PGA" },
 
 	{ "LINEOUT2N Driver", NULL, "LINEOUT2 Mixer" },
@@ -823,9 +848,11 @@ static const struct snd_soc_dapm_route lineout2_diff_routes[] = {
 };
 
 static const struct snd_soc_dapm_route lineout2_se_routes[] = {
+	{ "LINEOUT2N Mixer", NULL, "LINEOUT_VMID_BUF" },
 	{ "LINEOUT2N Mixer", "Left Output Switch", "Left Output PGA" },
 	{ "LINEOUT2N Mixer", "Right Output Switch", "Right Output PGA" },
 
+	{ "LINEOUT2P Mixer", NULL, "LINEOUT_VMID_BUF" },
 	{ "LINEOUT2P Mixer", "Right Output Switch", "Right Output PGA" },
 
 	{ "LINEOUT2N Driver", NULL, "LINEOUT2N Mixer" },
