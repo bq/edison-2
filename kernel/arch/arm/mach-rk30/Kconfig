@@ -1,0 +1,104 @@
+if ARCH_RK30
+
+choice
+	prompt "RK30xx Board Type"
+	default MACH_RK30_SDK
+
+config MACH_RK30_SDK
+	bool "RK30 SDK board"
+	
+config MACH_RK30_DS975
+	bool "RK30 DS975 board"
+
+config MACH_RK3066_SDK
+	bool "RK3066 SDK board"
+
+config MACH_RK30_DS1001B
+        bool "RK30 DS1001B board"
+
+config MACH_RK30_PHONE_PAD
+        bool "RK30 smart phone pad board"
+        
+config MACH_RK30_PHONE
+	bool "RK30 smart phone board"
+
+config MACH_RK30_PHONE_LOQUAT
+	bool "RK30 smart phone loquat board"
+
+config MACH_RK30_PHONE_A22
+        bool "RK30 smart phone a22 board"
+	
+endchoice
+
+menuconfig PROJECT_TYPE
+	bool "RK30xx Projectg Type"
+	
+if PROJECT_TYPE
+menuconfig MALATA_C8005
+	bool "Malata C8005 Project"
+
+menuconfig MALATA_D8002
+	bool "Malata D8002 Project"
+
+menuconfig MALATA_D7007
+	bool "Malata D7007 Project"
+
+menuconfig MALATA_D7006
+	bool "Malata D7006 Project"
+
+menuconfig MALATA_C1016
+	bool "Malata C1016 Project"
+
+menuconfig MALATA_D8005
+	bool "Malata D8005 Project"
+
+menuconfig MALATA_D7008
+	bool "Malata D8005 Project"
+
+menuconfig MALATA_D1002
+	bool "Malata D1002 Project"
+
+menuconfig MALATA_C7022
+	bool "Malata C7022 Project"
+
+menuconfig MALATA_C7011
+	bool "Malata C7011 Project"
+
+menuconfig MALATA_D9001
+	bool "Malata D9001 Project"
+endif
+
+choice
+	prompt "CE CONFIG"
+	default UNPASS_CE
+
+config PASS_CE
+	bool "CODEC HEADSET PASS CE"
+
+config UNPASS_CE
+	bool "CODEC HEADSET UNPASS CE"
+endchoice
+
+choice
+	prompt "HEADSET CE CONFIG"
+	default UN_HEADSET_PASS_CE
+
+config HEADSET_PASS_CE
+	bool "CODEC RT5631 HEADSET PASS CE"
+
+config UN_HEADSET_PASS_CE
+	bool "CODEC RT5631 HEADSET UNPASS CE"
+endchoice
+
+choice
+	prompt "RK30xx GPU Type"
+	default GPU_SUPPORT_400M
+
+config GPU_SUPPORT_400M
+	bool "gpu  support  400M"
+
+config GPU_SUPPORT_266M
+	bool "gpu  support  266M"
+
+endchoice
+endif
