@@ -1,0 +1,23 @@
+#
+# encryption ic drivers configuration
+#
+
+menuconfig ENCRYPTION_IC_DEVICE
+	bool "encryption device support"
+	default n
+	help
+	  Enable this to be able to choose the drivers for controlling the
+	  encryption IC on some platforms, for example on PDAs.
+
+if ENCRYPTION_IC_DEVICE
+
+config ENCRYPTION_DM2016_MALATA
+  bool "encryption DM2016"
+	depends on ENCRYPTION_IC_DEVICE
+	default n
+	help
+	  To have support for your specific encryption ic you will have to
+	  select the proper drivers which depend on this option.
+
+endif
+
